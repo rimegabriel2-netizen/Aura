@@ -1,0 +1,2286 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/framer-motion@11.11.17/dist/framer-motion.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Geist', 'system-ui', 'sans-serif'],
+          mono: ['Geist Mono', 'monospace'],
+        },
+      }
+    }
+  }
+</script>
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Geist', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background: #F5F5F7;
+    transition: background-color 1.5s cubic-bezier(0.4, 0, 0.2, 1), color 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  /* Aurora background — subtil */
+  .aurora {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .aurora-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.35;
+    mix-blend-mode: multiply;
+    transition: opacity 1.5s, background 1.5s;
+  }
+  .aurora-blob.one {
+    width: 500px; height: 500px;
+    background: #c7d2fe;
+    top: -100px; left: -100px;
+    animation: float1 20s ease-in-out infinite;
+  }
+  .aurora-blob.two {
+    width: 600px; height: 600px;
+    background: #fed7d7;
+    bottom: -150px; right: -100px;
+    animation: float2 25s ease-in-out infinite;
+  }
+  .aurora-blob.three {
+    width: 400px; height: 400px;
+    background: #ddd6fe;
+    top: 40%; left: 50%;
+    animation: float3 30s ease-in-out infinite;
+  }
+  @keyframes float1 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(80px,60px)} }
+  @keyframes float2 { 0%,100%{transform:translate(0,0)} 50%{transform:translate(-60px,-80px)} }
+  @keyframes float3 { 0%,100%{transform:translate(-50%,-50%)} 50%{transform:translate(-30%,-70%)} }
+  body.dark .aurora-blob { mix-blend-mode: screen; opacity: 0.2; }
+  body.dark .aurora-blob.one { background: #312e81; }
+  body.dark .aurora-blob.two { background: #831843; }
+  body.dark .aurora-blob.three { background: #4c1d95; }
+
+  /* Glass cards */
+  .glass {
+    background: rgba(255, 255, 255, 0.55);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 8px 32px -8px rgba(0,0,0,0.06);
+    transition: background 1.5s, border-color 1.5s;
+  }
+  body.dark .glass {
+    background: rgba(28, 28, 30, 0.6);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 32px -8px rgba(0,0,0,0.5);
+  }
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+  }
+  body.dark .glass-strong {
+    background: rgba(28, 28, 30, 0.8);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 5px; }
+  body.dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+
+  /* Disable text selection on buttons */
+  button { user-select: none; -webkit-user-select: none; }
+
+  /* Subtle ring on focus */
+  input:focus, select:focus, textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.15);
+  }
+</style>
+</head>
+<body>
+<div class="aurora">
+  <div class="aurora-blob one"></div>
+  <div class="aurora-blob two"></div>
+  <div class="aurora-blob three"></div>
+</div>
+<div id="root" style="position: relative; z-index: 1;"></div>
+
+<script type="text/babel" data-type="module">
+const { useState, useEffect, useMemo, useRef, useCallback } = React;
+const { motion, AnimatePresence, LayoutGroup } = window.Motion || window.framerMotion || {};
+
+// ===================== ICONS (inline SVG) =====================
+const Icon = ({ name, size = 20, className = '', strokeWidth = 1.75 }) => {
+  const paths = {
+    home: <><path d="M3 12L12 3l9 9"/><path d="M5 10v10a1 1 0 001 1h3v-6h6v6h3a1 1 0 001-1V10"/></>,
+    grid: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
+    chart: <><path d="M3 3v18h18"/><path d="M7 16l4-6 4 3 5-7"/></>,
+    wallet: <><path d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/><path d="M16 12h2"/><path d="M3 9h18"/></>,
+    plus: <><path d="M12 5v14M5 12h14"/></>,
+    check: <path d="M5 12l5 5L20 7"/>,
+    x: <path d="M6 6l12 12M18 6L6 18"/>,
+    trash: <><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></>,
+    sun: <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></>,
+    moon: <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>,
+    download: <><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>,
+    upload: <><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></>,
+    arrowUp: <path d="M12 19V5M5 12l7-7 7 7"/>,
+    arrowDown: <path d="M12 5v14M19 12l-7 7-7-7"/>,
+    sparkle: <><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></>,
+    chevronLeft: <path d="M15 18l-6-6 6-6"/>,
+    chevronRight: <path d="M9 18l6-6-6-6"/>,
+    settings: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h0a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v0a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></>,
+  };
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
+      {paths[name]}
+    </svg>
+  );
+};
+
+// ===================== STORAGE =====================
+const KEY = 'aura_v3';
+
+// Template hebdo : map jour de semaine (1=lundi, 7=dimanche) → liste de blocs
+// Blocs en minutes pour gérer les horaires non-pile (07:00-07:30, 11:15-12:15, etc.)
+// startMin / endMin = minutes depuis 00:00. endMin peut dépasser 1440 pour les blocs qui passent minuit.
+const tpl = (id, sm, em, title, cat) => ({ tplId: id, startMin: sm, endMin: em, title, category: cat });
+const hm = (h, m = 0) => h * 60 + m;
+
+const defaultData = {
+  // Validité du template : à partir de cette date, le template s'applique
+  templateStartDate: '2026-04-27', // lundi 27 avril 2026
+  templateEndDate: '2026-08-01',   // 1er août 2026
+
+  // weekTemplate[dow] = blocs récurrents (dow: 1=lundi … 7=dimanche)
+  weekTemplate: {
+    1: [ // LUNDI
+      tpl('mon-1', hm(7), hm(7,30), 'Déjeuner', 'perso'),
+      tpl('mon-2', hm(8), hm(9), 'Chimie', 'learn'),
+      tpl('mon-3', hm(8), hm(10), 'Meal', 'perso'),
+      tpl('mon-4', hm(9,5), hm(10), 'Révision chimie', 'learn'),
+      tpl('mon-5', hm(10), hm(10,30), 'Collation', 'perso'),
+      tpl('mon-6', hm(10,40), hm(12), 'Révision biologie', 'learn'),
+      tpl('mon-7', hm(12), hm(13), 'Diner', 'perso'),
+      tpl('mon-8', hm(13,5), hm(14), 'Révision biologie', 'learn'),
+      tpl('mon-9', hm(14), hm(16), 'Travail de maturité', 'learn'),
+      tpl('mon-10', hm(16), hm(16,30), 'Collation', 'perso'),
+      tpl('mon-11', hm(16,40), hm(18), 'Travail de maturité', 'learn'),
+      tpl('mon-12', hm(18,30), hm(20), 'Séance cardio', 'sport'),
+      tpl('mon-13', hm(22,30), hm(24), 'Sleep', 'perso'),
+    ],
+    2: [ // MARDI
+      tpl('tue-1', hm(7), hm(7,30), 'Déjeuner', 'perso'),
+      tpl('tue-2', hm(8), hm(9,55), 'Psychologie', 'learn'),
+      tpl('tue-3', hm(10), hm(11), 'Maths', 'learn'),
+      tpl('tue-4', hm(11,15), hm(12,15), 'Chimie', 'learn'),
+      tpl('tue-5', hm(12,20), hm(13), 'Diner', 'perso'),
+      tpl('tue-6', hm(13), hm(14), 'Psychologie', 'learn'),
+      tpl('tue-7', hm(14,5), hm(15), 'Balade publibike', 'perso'),
+      tpl('tue-8', hm(15,5), hm(18), 'Psychologie', 'learn'),
+      tpl('tue-9', hm(18,30), hm(20), 'Séance Jambe', 'sport'),
+      tpl('tue-10', hm(20,30), hm(21), 'Meal', 'perso'),
+      tpl('tue-11', hm(22,30), hm(24), 'Sleep', 'perso'),
+    ],
+    3: [ // MERCREDI
+      tpl('wed-1', hm(7), hm(7,30), 'Déjeuner', 'perso'),
+      tpl('wed-2', hm(8), hm(9), 'Espagnol', 'learn'),
+      tpl('wed-3', hm(9,5), hm(12), 'Espagnol révision', 'learn'),
+      tpl('wed-4', hm(12), hm(13), 'Diner', 'perso'),
+      tpl('wed-5', hm(13), hm(18), 'Français révision', 'learn'),
+      tpl('wed-6', hm(18,30), hm(20), 'Séance haut du corps', 'sport'),
+      tpl('wed-7', hm(20,30), hm(21), 'Meal', 'perso'),
+      tpl('wed-8', hm(21,5), hm(22,30), 'Lire Maupassant', 'learn'),
+      tpl('wed-9', hm(22,30), hm(24), 'Sleep', 'perso'),
+    ],
+    4: [ // JEUDI
+      tpl('thu-1', hm(7), hm(7,30), 'Déjeuner', 'perso'),
+      tpl('thu-2', hm(10,30), hm(11,30), 'Ilona coaching', 'sport'),
+      tpl('thu-3', hm(12,5), hm(13), 'Diner', 'perso'),
+      tpl('thu-4', hm(13), hm(14), 'Français', 'learn'),
+      tpl('thu-5', hm(14), hm(16), 'Allemand', 'learn'),
+      tpl('thu-6', hm(16), hm(17), 'Balade / Meal', 'perso'),
+      tpl('thu-7', hm(18), hm(19), 'Courir / intervalles', 'sport'),
+      tpl('thu-8', hm(20,30), hm(21), 'Meal', 'perso'),
+      tpl('thu-9', hm(22,30), hm(24), 'Sleep', 'perso'),
+    ],
+    5: [ // VENDREDI
+      tpl('fri-1', hm(7), hm(7,30), 'Déjeuner', 'perso'),
+      tpl('fri-2', hm(8), hm(10), 'Séance Jambe', 'sport'),
+      tpl('fri-3', hm(10,30), hm(12), 'Meal prep', 'agence'),
+      tpl('fri-4', hm(12), hm(13), 'Diner', 'perso'),
+      tpl('fri-5', hm(13), hm(16), 'Allemand révision', 'learn'),
+      tpl('fri-6', hm(16,5), hm(17), 'Collation', 'perso'),
+      tpl('fri-7', hm(17), hm(20), 'Allemand révision', 'learn'),
+      tpl('fri-8', hm(20,30), hm(21), 'Diner', 'perso'),
+      tpl('fri-9', hm(21,5), hm(22,30), 'Lire Rousseau', 'learn'),
+      tpl('fri-10', hm(22,30), hm(24), 'Sleep', 'perso'),
+    ],
+    6: [ // SAMEDI
+      tpl('sat-1', hm(7), hm(7,30), 'Déjeuner', 'perso'),
+      tpl('sat-2', hm(8), hm(9), 'Étirement', 'sport'),
+      tpl('sat-3', hm(10), hm(12), 'Maths', 'learn'),
+      tpl('sat-4', hm(12), hm(13), 'Diner', 'perso'),
+      tpl('sat-5', hm(13,5), hm(15), 'Maths', 'learn'),
+      tpl('sat-6', hm(16), hm(19), 'Biologie', 'learn'),
+      tpl('sat-7', hm(20,30), hm(21), 'Meal', 'perso'),
+      tpl('sat-8', hm(21,5), hm(22,25), 'Lire Rousseau', 'learn'),
+      tpl('sat-9', hm(22,30), hm(24), 'Sleep', 'perso'),
+    ],
+    7: [ // DIMANCHE
+      tpl('sun-1', hm(7), hm(7,30), 'Déjeuner', 'perso'),
+      tpl('sun-2', hm(8), hm(10), 'Course / longue sortie', 'sport'),
+      tpl('sun-3', hm(10,5), hm(11), 'Étirement / Abdos', 'sport'),
+      tpl('sun-4', hm(11), hm(16), 'Free', 'perso'),
+      tpl('sun-5', hm(12), hm(13), 'Diner', 'perso'),
+      tpl('sun-6', hm(17), hm(20), 'Meal prep', 'agence'),
+      tpl('sun-7', hm(20,30), hm(21), 'Meal', 'perso'),
+      tpl('sun-8', hm(21), hm(22,30), 'Lire Baudelaire', 'learn'),
+      tpl('sun-9', hm(22,30), hm(24), 'Sleep', 'perso'),
+    ],
+  },
+
+  // Statuts par jour : { 'YYYY-MM-DD': { 'tpl-id-or-block-id': 'done'|'fail' } }
+  // L'ID est l'ID UNIQUE de l'instance ce jour-là (combinaison date+tplId pour le template).
+  statuses: {},
+
+  // Overrides (jours custom) — quand on duplique une journée ou ajoute un bloc spécifique
+  // { 'YYYY-MM-DD': [{id, startMin, endMin, title, category}] } — remplace le template ce jour
+  overrides: {},
+
+  // Hors template : blocs ad-hoc ajoutés à un jour précis (s'ajoutent au template)
+  extraBlocks: {}, // { 'YYYY-MM-DD': [{id, startMin, endMin, title, category}] }
+
+  // Bibliothèque d'objectifs réutilisables
+  objectives: [
+    { id: 'o1', icon: '🏃', label: 'Sport', category: 'sport', defaultDuration: 60 },
+    { id: 'o2', icon: '📖', label: 'Lecture', category: 'learn', defaultDuration: 60 },
+    { id: 'o3', icon: '⚡', label: 'Code agence', category: 'agence', defaultDuration: 120 },
+    { id: 'o4', icon: '🎯', label: 'Deep work', category: 'work', defaultDuration: 120 },
+    { id: 'o5', icon: '🧠', label: 'Étudier', category: 'learn', defaultDuration: 120 },
+    { id: 'o6', icon: '🍽️', label: 'Repas', category: 'perso', defaultDuration: 60 },
+    { id: 'o7', icon: '🧘', label: 'Méditer', category: 'perso', defaultDuration: 30 },
+    { id: 'o8', icon: '✉️', label: 'Emails', category: 'work', defaultDuration: 60 },
+  ],
+  habits: [
+    { id: 'h1', name: 'Sport', icon: '🏃', history: {} },
+    { id: 'h2', name: 'Lecture', icon: '📖', history: {} },
+  ],
+  tasks: { do: [], plan: [], delegate: [], drop: [] },
+  transactions: [],
+  themeMode: 'auto',
+};
+
+const load = () => {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return structuredClone(defaultData);
+    const parsed = JSON.parse(raw);
+    return { ...structuredClone(defaultData), ...parsed };
+  } catch {
+    return structuredClone(defaultData);
+  }
+};
+const persist = (d) => localStorage.setItem(KEY, JSON.stringify(d));
+
+const dateKey = (d = new Date()) => {
+  const x = new Date(d);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+};
+const uid = () => Math.random().toString(36).slice(2, 10);
+const formatCHF = (n) => new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF', maximumFractionDigits: 0 }).format(n);
+
+// Format minutes → "HH:MM"
+const fmtMin = (m) => {
+  const h = Math.floor(m / 60) % 24;
+  const min = m % 60;
+  return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+};
+
+// Jour de semaine ISO (1=lundi, 7=dimanche)
+const isoDow = (date) => {
+  const d = (typeof date === 'string') ? new Date(date) : date;
+  return ((d.getDay() + 6) % 7) + 1;
+};
+
+// Récupère TOUS les blocs effectifs d'un jour (template OU override + extras)
+// Retourne [{ id, startMin, endMin, title, category, source: 'template'|'override'|'extra', tplId? }]
+const getDayBlocks = (data, dk) => {
+  // Si override pour ce jour : c'est le seul source de vérité
+  if (data.overrides && data.overrides[dk]) {
+    const overrides = data.overrides[dk].map(b => ({ ...b, source: 'override' }));
+    const extras = (data.extraBlocks?.[dk] || []).map(b => ({ ...b, source: 'extra' }));
+    return [...overrides, ...extras].sort((a, b) => a.startMin - b.startMin);
+  }
+
+  // Sinon : template du jour (si la date est dans la fenêtre de validité)
+  const inRange = (!data.templateStartDate || dk >= data.templateStartDate) &&
+                  (!data.templateEndDate || dk <= data.templateEndDate);
+  let templateBlocks = [];
+  if (inRange) {
+    const dow = isoDow(dk);
+    const tplBlocks = data.weekTemplate?.[dow] || [];
+    templateBlocks = tplBlocks.map(b => ({
+      id: `${dk}__${b.tplId}`, // ID unique par jour pour valider individuellement
+      tplId: b.tplId,
+      startMin: b.startMin,
+      endMin: b.endMin,
+      title: b.title,
+      category: b.category,
+      source: 'template',
+    }));
+  }
+  const extras = (data.extraBlocks?.[dk] || []).map(b => ({ ...b, source: 'extra' }));
+  return [...templateBlocks, ...extras].sort((a, b) => a.startMin - b.startMin);
+};
+
+const getBlockStatus = (data, dk, blockId) => data.statuses?.[dk]?.[blockId] || null;
+
+
+// ===================== THEME (Night Shift progressif) =====================
+// Transition douce entre 19h et 21h
+const useTheme = (mode) => {
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const compute = () => {
+      if (mode === 'light') return setIsDark(false);
+      if (mode === 'dark') return setIsDark(true);
+      const h = new Date().getHours() + new Date().getMinutes() / 60;
+      // sombre si entre 20h et 7h, transition à 19h-21h gérée visuellement via CSS transitions
+      setIsDark(h >= 20 || h < 7);
+    };
+    compute();
+    const i = setInterval(compute, 60_000);
+    return () => clearInterval(i);
+  }, [mode]);
+  useEffect(() => {
+    document.body.classList.toggle('dark', isDark);
+  }, [isDark]);
+  return isDark;
+};
+
+// ===================== SIDEBAR =====================
+const navItems = [
+  { id: 'dashboard', label: 'Dashboard', icon: 'home' },
+  { id: 'matrix', label: 'Matrice', icon: 'grid' },
+  { id: 'stats', label: 'Stats', icon: 'chart' },
+  { id: 'wallet', label: 'Wallet', icon: 'wallet' },
+];
+
+const Sidebar = ({ page, setPage, themeMode, cycleTheme, isDark }) => (
+  <aside className="fixed left-0 top-0 h-screen w-20 flex flex-col items-center py-6 z-20">
+    <div className="mb-8">
+      <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${isDark ? 'bg-white/5' : 'bg-black/5'}`}>
+        <span className="font-mono text-sm font-medium tracking-tight">Au</span>
+      </div>
+    </div>
+    <nav className="flex flex-col gap-2 flex-1">
+      {navItems.map(item => {
+        const active = page === item.id;
+        return (
+          <motion.button
+            key={item.id}
+            onClick={() => setPage(item.id)}
+            whileTap={{ scale: 0.92 }}
+            whileHover={{ scale: 1.05 }}
+            className={`relative w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
+              active
+                ? (isDark ? 'bg-white/10 text-white' : 'bg-white text-black shadow-sm')
+                : (isDark ? 'text-white/40 hover:text-white/70' : 'text-black/40 hover:text-black/70')
+            }`}
+            title={item.label}
+          >
+            <Icon name={item.icon} size={20} />
+            {active && (
+              <motion.div
+                layoutId="nav-indicator"
+                className={`absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-6 rounded-full ${isDark ? 'bg-white' : 'bg-black'}`}
+                transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              />
+            )}
+          </motion.button>
+        );
+      })}
+    </nav>
+    <button
+      onClick={cycleTheme}
+      className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isDark ? 'text-white/40 hover:text-white/70' : 'text-black/40 hover:text-black/70'}`}
+      title={`Thème: ${themeMode}`}
+    >
+      <Icon name={themeMode === 'dark' || (themeMode === 'auto' && isDark) ? 'moon' : 'sun'} size={18} />
+    </button>
+  </aside>
+);
+
+// ===================== DASHBOARD =====================
+const categories = {
+  work: { label: 'Travail', color: '#FF6B6B', soft: 'rgba(255,107,107,0.12)' },
+  sport: { label: 'Sport', color: '#4ECDC4', soft: 'rgba(78,205,196,0.12)' },
+  learn: { label: 'Étudier', color: '#A78BFA', soft: 'rgba(167,139,250,0.12)' },
+  perso: { label: 'Perso', color: '#FBBF24', soft: 'rgba(251,191,36,0.12)' },
+  agence: { label: 'Agence', color: '#60A5FA', soft: 'rgba(96,165,250,0.12)' },
+};
+
+const burstParticles = (x, y, color = '#10B981') => {
+  const colors = [color, '#FBBF24', '#A78BFA', '#4ECDC4', '#10B981'];
+  for (let i = 0; i < 18; i++) {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:7px;height:7px;border-radius:50%;background:${colors[i % colors.length]};pointer-events:none;z-index:9999;`;
+    document.body.appendChild(el);
+    const angle = (Math.PI * 2 * i) / 18 + Math.random() * 0.4;
+    const speed = 70 + Math.random() * 70;
+    const dx = Math.cos(angle) * speed;
+    const dy = Math.sin(angle) * speed - 30;
+    el.animate(
+      [{ transform: 'translate(0,0) scale(1)', opacity: 1 }, { transform: `translate(${dx}px, ${dy + 180}px) scale(0.3)`, opacity: 0 }],
+      { duration: 800 + Math.random() * 300, easing: 'cubic-bezier(0.2, 0.8, 0.4, 1)' }
+    );
+    setTimeout(() => el.remove(), 1300);
+  }
+};
+
+const ObjectiveLibrary = ({ data, setData, isDark }) => {
+  const [showAdd, setShowAdd] = useState(false);
+  const [newLabel, setNewLabel] = useState('');
+  const [newIcon, setNewIcon] = useState('◇');
+  const [newCat, setNewCat] = useState('work');
+
+  const addObjective = () => {
+    if (!newLabel.trim()) return;
+    setData({ ...data, objectives: [...(data.objectives || []), { id: uid(), icon: newIcon || '◇', label: newLabel.trim(), category: newCat, defaultDuration: 60 }] });
+    setNewLabel(''); setNewIcon('◇'); setShowAdd(false);
+  };
+  const deleteObjective = (id) => {
+    if (!confirm('Supprimer cet objectif ?')) return;
+    setData({ ...data, objectives: (data.objectives || []).filter(o => o.id !== id) });
+  };
+
+  return (
+    <div className="glass rounded-3xl p-5 flex flex-col h-full">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className={`text-base font-medium ${isDark ? 'text-white' : 'text-black'}`}>Objectifs</h2>
+          <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'}`}>Glisse dans la timeline</p>
+        </div>
+        <button onClick={() => setShowAdd(!showAdd)} className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${isDark ? 'bg-white/10 hover:bg-white/15' : 'bg-black/5 hover:bg-black/10'}`}>
+          <Icon name={showAdd ? 'x' : 'plus'} size={14} />
+        </button>
+      </div>
+      <AnimatePresence>
+        {showAdd && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden mb-3">
+            <div className={`p-3 rounded-2xl space-y-2 ${isDark ? 'bg-white/[0.03]' : 'bg-black/[0.02]'}`}>
+              <div className="flex gap-2">
+                <input type="text" value={newIcon} onChange={(e) => setNewIcon(e.target.value.slice(0, 2))} className={`w-12 px-2 py-1.5 rounded-lg text-center text-base ${isDark ? 'bg-white/5 text-white' : 'bg-white/60 text-black'}`} placeholder="◇" />
+                <input type="text" value={newLabel} onChange={(e) => setNewLabel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addObjective()} className={`flex-1 px-3 py-1.5 rounded-lg text-sm ${isDark ? 'bg-white/5 text-white placeholder-white/30' : 'bg-white/60 text-black placeholder-black/30'}`} placeholder="Nom de l'objectif" autoFocus />
+              </div>
+              <div className="flex gap-1">
+                {Object.entries(categories).map(([key, c]) => (
+                  <button key={key} onClick={() => setNewCat(key)} className={`flex-1 py-1 rounded-lg text-[10px] font-medium transition-all ${newCat === key ? 'ring-2' : 'opacity-50 hover:opacity-100'}`} style={{ background: c.soft, color: c.color, '--tw-ring-color': c.color }}>{c.label}</button>
+                ))}
+              </div>
+              <button onClick={addObjective} disabled={!newLabel.trim()} className={`w-full py-1.5 rounded-lg text-xs font-medium disabled:opacity-40 ${isDark ? 'bg-white text-black' : 'bg-black text-white'}`}>Ajouter</button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+        {(data.objectives || []).map(obj => {
+          const cat = categories[obj.category] || categories.work;
+          return (
+            <motion.div key={obj.id} layout draggable onDragStart={(e) => { e.dataTransfer.setData('application/x-objective', obj.id); e.dataTransfer.effectAllowed = 'copy'; }}
+              className="group flex items-center gap-2.5 p-2.5 rounded-xl cursor-grab active:cursor-grabbing transition-all"
+              style={{ background: cat.soft, borderLeft: `3px solid ${cat.color}` }} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <span className="text-lg">{obj.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-black'}`}>{obj.label}</div>
+                <div className="font-mono text-[9px] uppercase tracking-wider" style={{ color: cat.color }}>{cat.label} · {Math.round((obj.defaultDuration || 60) / 60 * 10) / 10}h</div>
+              </div>
+              <button onClick={(e) => { e.stopPropagation(); deleteObjective(obj.id); }} className={`opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? 'text-white/40 hover:text-rose-400' : 'text-black/40 hover:text-rose-500'}`}>
+                <Icon name="x" size={12} />
+              </button>
+            </motion.div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const BlockChip = ({ block, status, onToggle, onEdit, onDelete, isDark, compact = false }) => {
+  const cat = categories[block.category] || categories.work;
+  const isDone = status === 'done';
+  const isFail = status === 'fail';
+  const checkRef = useRef(null);
+
+  const handleToggle = (e) => {
+    e.stopPropagation();
+    if (!isDone && !isFail && checkRef.current) {
+      const rect = checkRef.current.getBoundingClientRect();
+      burstParticles(rect.left + rect.width / 2, rect.top + rect.height / 2, cat.color);
+      checkRef.current.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.4)' }, { transform: 'scale(1)' }], { duration: 350, easing: 'cubic-bezier(0.34, 1.56, 0.64, 1)' });
+    }
+    onToggle();
+  };
+
+  return (
+    <motion.div layout animate={{ opacity: isFail ? 0.45 : 1 }}
+      className={`group relative cursor-default transition-all ${compact ? 'py-2 px-3' : 'p-3'} rounded-2xl`}
+      style={{ background: isDone ? `${cat.color}1f` : cat.soft, borderLeft: `3px solid ${cat.color}`, backdropFilter: 'blur(10px)' }}>
+      <div className="flex items-start gap-3">
+        <button ref={checkRef} onClick={handleToggle} className="flex-shrink-0 mt-0.5 transition-all" title={isDone ? 'Décocher' : 'Valider'}>
+          <div className="w-5 h-5 rounded-md flex items-center justify-center transition-all" style={{ background: isDone ? cat.color : 'transparent', border: `1.5px solid ${isDone ? cat.color : (isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.2)')}`, boxShadow: isDone ? `0 2px 8px ${cat.color}55` : 'none' }}>
+            {isDone && <Icon name="check" size={12} className="text-white" strokeWidth={3} />}
+          </div>
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className={`text-sm font-medium ${isDark ? 'text-white' : 'text-black'} ${isFail ? 'line-through decoration-2' : ''} ${isDone ? 'opacity-60' : ''}`}>{block.title}</div>
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            <span className="font-mono text-[10px]" style={{ color: cat.color }}>{fmtMin(block.startMin)} – {fmtMin(block.endMin)}</span>
+            <span className="text-[9px] px-1.5 py-px rounded-md font-medium uppercase tracking-wider" style={{ background: cat.color + '22', color: cat.color }}>{cat.label}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {!isFail && !isDone && (
+            <button onClick={(e) => { e.stopPropagation(); onToggle('fail'); }} title="Marquer échec" className={`w-6 h-6 rounded-md flex items-center justify-center ${isDark ? 'hover:bg-rose-500/20 text-white/40 hover:text-rose-400' : 'hover:bg-rose-500/10 text-black/40 hover:text-rose-500'}`}>
+              <Icon name="x" size={12} />
+            </button>
+          )}
+          {(isFail || isDone) && (
+            <button onClick={(e) => { e.stopPropagation(); onToggle('reset'); }} title="Réinitialiser" className={`w-6 h-6 rounded-md flex items-center justify-center text-xs ${isDark ? 'hover:bg-white/10 text-white/50' : 'hover:bg-black/10 text-black/50'}`}>↺</button>
+          )}
+          {onEdit && <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className={`w-6 h-6 rounded-md flex items-center justify-center ${isDark ? 'hover:bg-white/10 text-white/60' : 'hover:bg-black/10 text-black/60'}`}><Icon name="settings" size={11} /></button>}
+          {onDelete && <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className={`w-6 h-6 rounded-md flex items-center justify-center ${isDark ? 'hover:bg-rose-500/20 text-white/60 hover:text-rose-400' : 'hover:bg-rose-500/10 text-black/60 hover:text-rose-500'}`}><Icon name="trash" size={11} /></button>}
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+const TimelineView = ({ data, dk, blocks, onValidate, onEditBlock, onDeleteExtra, onSlotClick, onDropObjective, isDark }) => {
+  const scrollRef = useRef(null);
+  const [hoverHour, setHoverHour] = useState(null);
+  const HOUR_PX = 60;
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      const now = new Date();
+      const offset = (now.getHours() - 5) * HOUR_PX;
+      scrollRef.current.scrollTop = Math.max(0, offset);
+    }
+  }, [dk]);
+
+  const isToday = dk === dateKey();
+  const now = new Date();
+  const nowMinutes = isToday ? (now.getHours() * 60 + now.getMinutes()) : -1;
+
+  return (
+    <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
+      <div className="relative" style={{ height: `${24 * HOUR_PX + 20}px` }}>
+        {Array.from({ length: 24 }).map((_, h) => (
+          <div key={h} className="absolute left-0 right-0 flex items-start gap-3" style={{ top: `${h * HOUR_PX}px`, height: `${HOUR_PX}px` }}
+            onDragOver={(e) => { e.preventDefault(); setHoverHour(h); }} onDragLeave={() => setHoverHour(null)}
+            onDrop={(e) => { e.preventDefault(); setHoverHour(null); const objId = e.dataTransfer.getData('application/x-objective'); if (objId) onDropObjective(objId, h); }}
+            onClick={() => onSlotClick(h)}>
+            <div className={`font-mono text-[10px] w-10 -mt-1.5 ${isDark ? 'text-white/30' : 'text-black/30'}`}>{String(h).padStart(2, '0')}:00</div>
+            <div className={`flex-1 h-full -ml-1 cursor-pointer transition-colors ${hoverHour === h ? (isDark ? 'bg-white/5' : 'bg-black/5') : ''}`} style={{ borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)'}` }}></div>
+          </div>
+        ))}
+        {nowMinutes >= 0 && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }} className="absolute left-10 right-0 z-10 flex items-center gap-2 pointer-events-none" style={{ top: `${(nowMinutes / 60) * HOUR_PX}px` }}>
+            <div className="w-2 h-2 rounded-full bg-rose-500 -ml-1"></div>
+            <div className="flex-1 h-px bg-rose-500/60"></div>
+          </motion.div>
+        )}
+        <AnimatePresence>
+          {blocks.map(b => {
+            const status = getBlockStatus(data, dk, b.id);
+            const top = (b.startMin / 60) * HOUR_PX + 2;
+            const height = ((b.endMin - b.startMin) / 60) * HOUR_PX - 4;
+            return (
+              <motion.div key={b.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+                className="absolute left-14 right-2" style={{ top: `${top}px`, height: `${Math.max(height, 30)}px`, minHeight: '30px' }}>
+                <BlockChip block={b} status={status} onToggle={(action) => onValidate(b.id, action)}
+                  onEdit={(b.source === 'extra' || b.source === 'override') ? () => onEditBlock(b) : null}
+                  onDelete={b.source === 'extra' ? () => onDeleteExtra(b.id) : null}
+                  isDark={isDark} compact={height < 60} />
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
+
+const WeekView = ({ data, setData, isDark, onEditBlock, weekOffset, setWeekOffset }) => {
+  const monday = useMemo(() => {
+    const d = new Date();
+    const dow = (d.getDay() + 6) % 7;
+    d.setDate(d.getDate() - dow + weekOffset * 7);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [weekOffset]);
+  const days = useMemo(() => Array.from({ length: 7 }).map((_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; }), [monday]);
+  const dayNames = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+  const todayK = dateKey();
+
+  const validateBlock = (dk, blockId, action) => {
+    const newStatuses = { ...(data.statuses || {}) };
+    const dayStatuses = { ...(newStatuses[dk] || {}) };
+    if (action === 'reset') delete dayStatuses[blockId];
+    else if (action === 'fail') {
+      dayStatuses[blockId] = dayStatuses[blockId] === 'fail' ? null : 'fail';
+      if (!dayStatuses[blockId]) delete dayStatuses[blockId];
+    } else {
+      dayStatuses[blockId] = dayStatuses[blockId] === 'done' ? null : 'done';
+      if (!dayStatuses[blockId]) delete dayStatuses[blockId];
+    }
+    if (Object.keys(dayStatuses).length === 0) delete newStatuses[dk];
+    else newStatuses[dk] = dayStatuses;
+    setData({ ...data, statuses: newStatuses });
+  };
+
+  const handleDropObjective = (dk, objId) => {
+    const obj = (data.objectives || []).find(o => o.id === objId);
+    if (!obj) return;
+    const dayBlocks = getDayBlocks(data, dk);
+    let startMin = 7 * 60;
+    while (dayBlocks.some(b => startMin >= b.startMin && startMin < b.endMin)) startMin += 30;
+    if (startMin > 22 * 60) startMin = 7 * 60;
+    const newBlock = { id: uid(), startMin, endMin: startMin + (obj.defaultDuration || 60), title: obj.label, category: obj.category };
+    setData({ ...data, extraBlocks: { ...(data.extraBlocks || {}), [dk]: [...((data.extraBlocks || {})[dk] || []), newBlock] } });
+  };
+
+  const deleteExtra = (dk, blockId) => {
+    const list = ((data.extraBlocks || {})[dk] || []).filter(b => b.id !== blockId);
+    const newExtras = { ...(data.extraBlocks || {}) };
+    if (list.length === 0) delete newExtras[dk];
+    else newExtras[dk] = list;
+    setData({ ...data, extraBlocks: newExtras });
+  };
+
+  const dayScore = (dk) => {
+    const blocks = getDayBlocks(data, dk);
+    if (blocks.length === 0) return null;
+    const validated = blocks.filter(b => getBlockStatus(data, dk, b.id) === 'done').length;
+    return Math.round((validated / blocks.length) * 100);
+  };
+
+  return (
+    <div className="flex-1 overflow-hidden flex flex-col min-h-0">
+      <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setWeekOffset(weekOffset - 1)} className={`w-8 h-8 rounded-lg flex items-center justify-center ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}><Icon name="chevronLeft" size={14} /></button>
+          <button onClick={() => setWeekOffset(0)} className={`text-xs font-mono uppercase tracking-wider px-2 ${isDark ? 'text-white/60' : 'text-black/60'}`}>
+            {weekOffset === 0 ? 'Cette semaine' : (weekOffset === 1 ? 'Sem. prochaine' : (weekOffset === -1 ? 'Sem. dernière' : `S${weekOffset > 0 ? '+' : ''}${weekOffset}`))}
+          </button>
+          <button onClick={() => setWeekOffset(weekOffset + 1)} className={`w-8 h-8 rounded-lg flex items-center justify-center ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}><Icon name="chevronRight" size={14} /></button>
+        </div>
+        <div className={`font-mono text-xs ${isDark ? 'text-white/40' : 'text-black/40'}`}>
+          {monday.toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })} — {days[6].toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 lg:grid-cols-7 gap-3">
+        {days.map((d, idx) => {
+          const dk = dateKey(d);
+          const dayBlocks = getDayBlocks(data, dk);
+          const isToday = dk === todayK;
+          const score = dayScore(dk);
+          return (
+            <div key={dk}
+              onDragOver={(e) => { e.preventDefault(); e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)'; }}
+              onDragLeave={(e) => { e.currentTarget.style.background = ''; }}
+              onDrop={(e) => { e.preventDefault(); e.currentTarget.style.background = ''; const objId = e.dataTransfer.getData('application/x-objective'); if (objId) handleDropObjective(dk, objId); }}
+              className={`flex flex-col rounded-2xl p-3 transition-colors min-h-[200px] ${isToday ? (isDark ? 'bg-white/[0.04]' : 'bg-white/60') : (isDark ? 'bg-white/[0.02]' : 'bg-white/30')}`}>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className={`text-sm font-medium ${isToday ? (isDark ? 'text-white' : 'text-black') : (isDark ? 'text-white/70' : 'text-black/70')}`}>{dayNames[idx]}</div>
+                  <div className={`font-mono text-[10px] ${isDark ? 'text-white/30' : 'text-black/30'}`}>{d.getDate()}/{String(d.getMonth() + 1).padStart(2,'0')}</div>
+                </div>
+                {score !== null && (
+                  <div className="font-mono text-[10px] px-1.5 py-0.5 rounded-md" style={{ background: score >= 70 ? '#10B98122' : (score < 40 ? '#EF444422' : (isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)')), color: score >= 70 ? '#10B981' : (score < 40 ? '#EF4444' : (isDark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)')) }}>{score}%</div>
+                )}
+              </div>
+              <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto" style={{ maxHeight: '60vh' }}>
+                {dayBlocks.length === 0 && <div className={`text-[10px] font-mono uppercase tracking-wider text-center py-4 ${isDark ? 'text-white/20' : 'text-black/20'}`}>Glisse un objectif</div>}
+                <AnimatePresence>
+                  {dayBlocks.map(b => (
+                    <motion.div key={b.id} layout initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }}>
+                      <BlockChip block={b} status={getBlockStatus(data, dk, b.id)}
+                        onToggle={(action) => validateBlock(dk, b.id, action)}
+                        onEdit={(b.source === 'extra' || b.source === 'override') ? () => onEditBlock(b, dk) : null}
+                        onDelete={b.source === 'extra' ? () => deleteExtra(dk, b.id) : null}
+                        isDark={isDark} compact />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+const BlockEditor = ({ block, onSave, onDelete, onCancel, isDark }) => {
+  const [b, setB] = useState({ ...block, startMin: block.startMin ?? 480, endMin: block.endMin ?? 540 });
+  const startH = Math.floor(b.startMin / 60);
+  const startM = b.startMin % 60;
+  const endH = Math.floor(b.endMin / 60);
+  const endM = b.endMin % 60;
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onCancel} className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)' }}>
+      <motion.div initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }} transition={{ type: 'spring', damping: 30, stiffness: 350 }} onClick={(e) => e.stopPropagation()} className="glass-strong rounded-3xl p-6 w-full max-w-md">
+        <h3 className={`text-xl font-medium mb-1 ${isDark ? 'text-white' : 'text-black'}`}>{block.isNew ? 'Nouveau bloc' : 'Modifier le bloc'}</h3>
+        <p className={`text-sm mb-5 ${isDark ? 'text-white/50' : 'text-black/50'}`}>{fmtMin(b.startMin)} – {fmtMin(b.endMin)}</p>
+        <div className="space-y-4">
+          <div>
+            <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Titre</label>
+            <input type="text" value={b.title} onChange={e => setB({ ...b, title: e.target.value })} autoFocus placeholder="Ex: Sport, Étude maths..." className={`w-full px-4 py-2.5 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-white/30' : 'bg-white/60 border-black/5 text-black placeholder-black/30'}`} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Début</label>
+              <div className="flex gap-1">
+                <select value={startH} onChange={e => setB({ ...b, startMin: +e.target.value * 60 + startM })} className={`flex-1 px-2 py-2.5 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white/60 border-black/5 text-black'}`}>
+                  {Array.from({length: 24}).map((_, h) => <option key={h} value={h}>{String(h).padStart(2,'0')}h</option>)}
+                </select>
+                <select value={startM} onChange={e => setB({ ...b, startMin: startH * 60 + +e.target.value })} className={`flex-1 px-2 py-2.5 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white/60 border-black/5 text-black'}`}>
+                  {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => <option key={m} value={m}>{String(m).padStart(2,'0')}</option>)}
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Fin</label>
+              <div className="flex gap-1">
+                <select value={endH} onChange={e => setB({ ...b, endMin: +e.target.value * 60 + endM })} className={`flex-1 px-2 py-2.5 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white/60 border-black/5 text-black'}`}>
+                  {Array.from({length: 25}).map((_, h) => <option key={h} value={h}>{String(h).padStart(2,'0')}h</option>)}
+                </select>
+                <select value={endM} onChange={e => setB({ ...b, endMin: endH * 60 + +e.target.value })} className={`flex-1 px-2 py-2.5 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white/60 border-black/5 text-black'}`}>
+                  {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => <option key={m} value={m}>{String(m).padStart(2,'0')}</option>)}
+                </select>
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Catégorie</label>
+            <div className="grid grid-cols-5 gap-2">
+              {Object.entries(categories).map(([key, c]) => (
+                <button key={key} onClick={() => setB({ ...b, category: key })} className={`py-2 px-2 rounded-xl text-xs font-medium transition-all ${b.category === key ? 'ring-2' : 'opacity-60 hover:opacity-100'}`} style={{ background: c.soft, color: c.color, '--tw-ring-color': c.color }}>{c.label}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-between items-center gap-2 mt-6">
+          <div>{onDelete && <button onClick={onDelete} className="text-rose-500 text-sm font-medium px-3 py-2">Supprimer</button>}</div>
+          <div className="flex gap-2">
+            <button onClick={onCancel} className={`text-sm font-medium px-4 py-2 ${isDark ? 'text-white/60' : 'text-black/60'}`}>Annuler</button>
+            <button onClick={() => onSave(b)} disabled={!b.title.trim() || b.endMin <= b.startMin} className={`text-sm font-medium px-4 py-2 rounded-xl disabled:opacity-40 ${isDark ? 'bg-white text-black' : 'bg-black text-white'}`}>Enregistrer</button>
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+const Dashboard = ({ data, setData, isDark }) => {
+  const [editingBlock, setEditingBlock] = useState(null);
+  const [view, setView] = useState('week');
+  const [weekOffset, setWeekOffset] = useState(0);
+  const today = dateKey();
+  const todayBlocks = getDayBlocks(data, today);
+
+  const validateBlock = (blockId, action, dk = today) => {
+    const newStatuses = { ...(data.statuses || {}) };
+    const dayStatuses = { ...(newStatuses[dk] || {}) };
+    if (action === 'reset') delete dayStatuses[blockId];
+    else if (action === 'fail') {
+      dayStatuses[blockId] = dayStatuses[blockId] === 'fail' ? null : 'fail';
+      if (!dayStatuses[blockId]) delete dayStatuses[blockId];
+    } else {
+      dayStatuses[blockId] = dayStatuses[blockId] === 'done' ? null : 'done';
+      if (!dayStatuses[blockId]) delete dayStatuses[blockId];
+    }
+    if (Object.keys(dayStatuses).length === 0) delete newStatuses[dk];
+    else newStatuses[dk] = dayStatuses;
+    setData({ ...data, statuses: newStatuses });
+  };
+
+  const handleDropObjectiveOnTimeline = (objId, hour) => {
+    const obj = (data.objectives || []).find(o => o.id === objId);
+    if (!obj) return;
+    const newBlock = { id: uid(), startMin: hour * 60, endMin: hour * 60 + (obj.defaultDuration || 60), title: obj.label, category: obj.category };
+    setData({ ...data, extraBlocks: { ...(data.extraBlocks || {}), [today]: [...((data.extraBlocks || {})[today] || []), newBlock] } });
+  };
+
+  const saveExtraBlock = (block, dk = today) => {
+    const list = ((data.extraBlocks || {})[dk] || []);
+    const idx = list.findIndex(b => b.id === block.id);
+    let newList;
+    const cleanBlock = { id: block.id || uid(), startMin: block.startMin, endMin: block.endMin, title: block.title, category: block.category };
+    if (idx >= 0) { newList = [...list]; newList[idx] = cleanBlock; }
+    else newList = [...list, cleanBlock];
+    setData({ ...data, extraBlocks: { ...(data.extraBlocks || {}), [dk]: newList } });
+    setEditingBlock(null);
+  };
+
+  const deleteExtra = (blockId, dk = today) => {
+    const list = ((data.extraBlocks || {})[dk] || []).filter(b => b.id !== blockId);
+    const newExtras = { ...(data.extraBlocks || {}) };
+    if (list.length === 0) delete newExtras[dk];
+    else newExtras[dk] = list;
+    setData({ ...data, extraBlocks: newExtras });
+  };
+
+  const todayDate = new Date().toLocaleDateString('fr-CH', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  return (
+    <div className="grid grid-cols-12 gap-6 h-full">
+      <div className="col-span-3 flex flex-col gap-6 min-h-0">
+        <div>
+          <p className={`font-mono text-xs uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'}`}>{todayDate}</p>
+          <h1 className={`text-3xl font-medium tracking-tight mt-2 leading-tight ${isDark ? 'text-white' : 'text-black'}`}>Une vie<br/><span className="font-light italic">une mission</span></h1>
+        </div>
+        <div className="flex-1 min-h-0">
+          <ObjectiveLibrary data={data} setData={setData} isDark={isDark} />
+        </div>
+      </div>
+      <div className="col-span-9 flex flex-col min-h-0">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-1 p-1 rounded-2xl glass">
+            <button onClick={() => setView('timeline')} className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-all ${view === 'timeline' ? (isDark ? 'bg-white text-black' : 'bg-black text-white') : (isDark ? 'text-white/50 hover:text-white' : 'text-black/50 hover:text-black')}`}>Timeline</button>
+            <button onClick={() => setView('week')} className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-all ${view === 'week' ? (isDark ? 'bg-white text-black' : 'bg-black text-white') : (isDark ? 'text-white/50 hover:text-white' : 'text-black/50 hover:text-black')}`}>Semaine</button>
+          </div>
+          <button onClick={() => setEditingBlock({ id: uid(), startMin: new Date().getHours() * 60, endMin: new Date().getHours() * 60 + 60, title: '', category: 'work', isNew: true, _dk: today })} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${isDark ? 'bg-white text-black' : 'bg-black text-white'}`}><Icon name="plus" size={14} /> Bloc</button>
+        </div>
+        <div className="glass rounded-3xl flex-1 overflow-hidden flex flex-col">
+          <AnimatePresence mode="wait">
+            {view === 'timeline' && (
+              <motion.div key="timeline" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">
+                <TimelineView data={data} dk={today} blocks={todayBlocks}
+                  onValidate={(id, action) => validateBlock(id, action, today)}
+                  onEditBlock={(b) => setEditingBlock({ ...b, _dk: today })}
+                  onDeleteExtra={(id) => deleteExtra(id, today)}
+                  onSlotClick={(h) => setEditingBlock({ id: uid(), startMin: h * 60, endMin: h * 60 + 60, title: '', category: 'work', isNew: true, _dk: today })}
+                  onDropObjective={handleDropObjectiveOnTimeline} isDark={isDark} />
+              </motion.div>
+            )}
+            {view === 'week' && (
+              <motion.div key="week" initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} transition={{ duration: 0.2 }} className="flex-1 flex flex-col min-h-0">
+                <WeekView data={data} setData={setData} isDark={isDark} onEditBlock={(b, dk) => setEditingBlock({ ...b, _dk: dk })} weekOffset={weekOffset} setWeekOffset={setWeekOffset} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+      <AnimatePresence>
+        {editingBlock && (
+          <BlockEditor block={editingBlock}
+            onSave={(b) => saveExtraBlock(b, editingBlock._dk || today)}
+            onDelete={editingBlock.isNew ? null : () => { deleteExtra(editingBlock.id, editingBlock._dk || today); setEditingBlock(null); }}
+            onCancel={() => setEditingBlock(null)} isDark={isDark} />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ===================== MATRIX =====================
+const quadrants = [
+  { id: 'do', title: 'Faire', subtitle: 'Important & urgent', color: '#FF6B6B', soft: 'rgba(255,107,107,0.08)' },
+  { id: 'plan', title: 'Planifier', subtitle: 'Important, pas urgent', color: '#FBBF24', soft: 'rgba(251,191,36,0.08)' },
+  { id: 'delegate', title: 'Déléguer', subtitle: 'Urgent, pas important', color: '#60A5FA', soft: 'rgba(96,165,250,0.08)' },
+  { id: 'drop', title: 'Éliminer', subtitle: 'Ni urgent ni important', color: '#9CA3AF', soft: 'rgba(156,163,175,0.08)' },
+];
+
+const Matrix = ({ data, setData, isDark }) => {
+  const [draggedTask, setDraggedTask] = useState(null);
+
+  const addTask = (q, text) => {
+    if (!text.trim()) return;
+    setData({
+      ...data,
+      tasks: { ...data.tasks, [q]: [...data.tasks[q], { id: uid(), text: text.trim(), done: false }] }
+    });
+  };
+  const toggleTask = (q, id) => {
+    setData({
+      ...data,
+      tasks: { ...data.tasks, [q]: data.tasks[q].map(t => t.id === id ? { ...t, done: !t.done } : t) }
+    });
+  };
+  const deleteTask = (q, id) => {
+    setData({ ...data, tasks: { ...data.tasks, [q]: data.tasks[q].filter(t => t.id !== id) } });
+  };
+  const moveTask = (fromQ, toQ, id) => {
+    if (fromQ === toQ) return;
+    const task = data.tasks[fromQ].find(t => t.id === id);
+    if (!task) return;
+    setData({
+      ...data,
+      tasks: {
+        ...data.tasks,
+        [fromQ]: data.tasks[fromQ].filter(t => t.id !== id),
+        [toQ]: [...data.tasks[toQ], task],
+      }
+    });
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="mb-6">
+        <p className={`font-mono text-xs uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'}`}>
+          Méthode Eisenhower
+        </p>
+        <h1 className={`text-5xl font-medium tracking-tight mt-2 ${isDark ? 'text-white' : 'text-black'}`}>
+          Priorités<span className="font-light italic"></span>
+        </h1>
+      </div>
+
+      <div className="grid grid-cols-2 grid-rows-2 gap-4 flex-1 min-h-0">
+        {quadrants.map(q => (
+          <Quadrant
+            key={q.id}
+            q={q}
+            tasks={data.tasks[q.id] || []}
+            onAdd={(text) => addTask(q.id, text)}
+            onToggle={(id) => toggleTask(q.id, id)}
+            onDelete={(id) => deleteTask(q.id, id)}
+            onDragStart={(id) => setDraggedTask({ id, from: q.id })}
+            onDrop={() => {
+              if (draggedTask) moveTask(draggedTask.from, q.id, draggedTask.id);
+              setDraggedTask(null);
+            }}
+            isDark={isDark}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const Quadrant = ({ q, tasks, onAdd, onToggle, onDelete, onDragStart, onDrop, isDark }) => {
+  const [input, setInput] = useState('');
+  const [dragOver, setDragOver] = useState(false);
+
+  return (
+    <motion.div
+      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); onDrop(); }}
+      animate={{ scale: dragOver ? 1.01 : 1 }}
+      className="glass rounded-3xl p-5 flex flex-col min-h-0"
+      style={{
+        background: dragOver ? q.soft : undefined,
+      }}
+    >
+      <div className="flex items-baseline justify-between mb-4">
+        <div>
+          <h3 className={`text-xl font-medium ${isDark ? 'text-white' : 'text-black'}`} style={{ color: q.color }}>
+            {q.title}
+          </h3>
+          <p className={`text-xs font-mono uppercase tracking-wider mt-0.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>
+            {q.subtitle}
+          </p>
+        </div>
+        <span className={`font-mono text-sm ${isDark ? 'text-white/30' : 'text-black/30'}`}>
+          {String(tasks.length).padStart(2, '0')}
+        </span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto space-y-1.5 mb-3">
+        <AnimatePresence>
+          {tasks.map(t => (
+            <motion.div
+              key={t.id}
+              layout
+              initial={{ opacity: 0, y: -5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              draggable
+              onDragStart={() => onDragStart(t.id)}
+              className={`group flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-grab active:cursor-grabbing ${isDark ? 'bg-white/[0.03] hover:bg-white/[0.06]' : 'bg-white/40 hover:bg-white/60'} ${t.done ? 'opacity-50' : ''}`}
+            >
+              <button
+                onClick={() => onToggle(t.id)}
+                className={`w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors`}
+                style={{
+                  background: t.done ? q.color : 'transparent',
+                  borderColor: t.done ? q.color : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'),
+                }}
+              >
+                {t.done && <Icon name="check" size={10} className="text-white" />}
+              </button>
+              <span className={`flex-1 text-sm ${t.done ? 'line-through' : ''} ${isDark ? 'text-white/90' : 'text-black/90'}`}>
+                {t.text}
+              </span>
+              <button
+                onClick={() => onDelete(t.id)}
+                className={`opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? 'text-white/40 hover:text-rose-400' : 'text-black/40 hover:text-rose-500'}`}
+              >
+                <Icon name="x" size={14} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            onAdd(input);
+            setInput('');
+          }
+        }}
+        placeholder="+ Ajouter une tâche"
+        className={`w-full px-3 py-2 rounded-xl text-sm border-0 ${isDark ? 'bg-white/[0.03] text-white placeholder-white/30' : 'bg-white/40 text-black placeholder-black/30'}`}
+      />
+    </motion.div>
+  );
+};
+
+// ===================== STATS =====================
+const Stats = ({ data, isDark }) => {
+  const today = dateKey();
+
+  // ----- Helpers de calcul -----
+  const computeStreak = (habit) => {
+    let s = 0;
+    const d = new Date();
+    if (habit.history[dateKey(d)] !== 'done') d.setDate(d.getDate() - 1);
+    while (habit.history[dateKey(d)] === 'done') { s++; d.setDate(d.getDate() - 1); }
+    return s;
+  };
+
+  // Score d'un jour (basé sur blocs du template + extras + habitudes)
+  const computeDayScore = (dk) => {
+    const blocks = getDayBlocks(data, dk);
+    let total = blocks.length, done = 0;
+    blocks.forEach(b => { if (getBlockStatus(data, dk, b.id) === 'done') done++; });
+    // Habitudes du jour aussi
+    data.habits.forEach(h => {
+      if (h.history[dk]) {
+        total++;
+        if (h.history[dk] === 'done') done++;
+      }
+    });
+    return total === 0 ? null : Math.round((done / total) * 100);
+  };
+
+  const hasActivity = (dk) => {
+    const score = computeDayScore(dk);
+    return score !== null;
+  };
+
+  // ----- Vue mensuelle (mois courant) -----
+  const [monthOffset, setMonthOffset] = useState(0);
+  const monthDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() + monthOffset);
+    return d;
+  }, [monthOffset]);
+
+  const monthDays = useMemo(() => {
+    const year = monthDate.getFullYear();
+    const month = monthDate.getMonth();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    return Array.from({ length: lastDay }, (_, i) => {
+      const d = new Date(year, month, i + 1);
+      return { date: d, dk: dateKey(d), score: computeDayScore(dateKey(d)) };
+    });
+  }, [monthDate, data]);
+
+  // Découpe le mois en semaines (lundi → dimanche)
+  const monthWeeks = useMemo(() => {
+    const weeks = [];
+    let currentWeek = [];
+    monthDays.forEach((day) => {
+      const dow = isoDow(day.date);
+      if (dow === 1 && currentWeek.length > 0) {
+        weeks.push(currentWeek);
+        currentWeek = [];
+      }
+      currentWeek.push(day);
+    });
+    if (currentWeek.length > 0) weeks.push(currentWeek);
+    return weeks;
+  }, [monthDays]);
+
+  // Score moyen par semaine (uniquement jours avec activité)
+  const weekScores = useMemo(() => {
+    return monthWeeks.map((week, i) => {
+      const validDays = week.filter(d => d.score !== null);
+      if (validDays.length === 0) return { idx: i + 1, score: 0, days: week, hasData: false };
+      const avg = Math.round(validDays.reduce((s, d) => s + d.score, 0) / validDays.length);
+      return { idx: i + 1, score: avg, days: week, hasData: true };
+    });
+  }, [monthWeeks]);
+
+  // Score du mois
+  const monthScore = useMemo(() => {
+    const valid = monthDays.filter(d => d.score !== null);
+    if (valid.length === 0) return 0;
+    return Math.round(valid.reduce((s, d) => s + d.score, 0) / valid.length);
+  }, [monthDays]);
+
+  // Score d'aujourd'hui et de la semaine courante
+  const todayScore = computeDayScore(today);
+  const thisWeekScore = useMemo(() => {
+    const d = new Date();
+    const dow = (d.getDay() + 6) % 7;
+    d.setDate(d.getDate() - dow);
+    const scores = [];
+    for (let i = 0; i < 7; i++) {
+      const dk = dateKey(d);
+      const s = computeDayScore(dk);
+      if (s !== null) scores.push(s);
+      d.setDate(d.getDate() + 1);
+    }
+    if (scores.length === 0) return 0;
+    return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
+  }, [data, today]);
+
+  const totalDoneBlocks = useMemo(() => {
+    let total = 0;
+    Object.values(data.statuses || {}).forEach(dayStatuses => {
+      Object.values(dayStatuses).forEach(s => { if (s === 'done') total++; });
+    });
+    return total;
+  }, [data.statuses]);
+
+  const habitsWithStreak = data.habits.map(h => ({ ...h, streak: computeStreak(h) })).sort((a, b) => b.streak - a.streak);
+  const bestStreak = habitsWithStreak[0]?.streak || 0;
+
+  const stats = [
+    { label: 'Aujourd\'hui', value: todayScore === null ? '—' : todayScore, unit: '%', color: '#FF6B6B' },
+    { label: 'Cette semaine', value: thisWeekScore, unit: '%', color: '#A78BFA' },
+    { label: 'Ce mois', value: monthScore, unit: '%', color: '#60A5FA' },
+    { label: 'Total validé', value: totalDoneBlocks, unit: '', color: '#10B981' },
+  ];
+
+  const monthName = monthDate.toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className={`font-mono text-xs uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'}`}>Analyse</p>
+        <h1 className={`text-5xl font-medium tracking-tight mt-2 ${isDark ? 'text-white' : 'text-black'}`}>Stats<span className="font-light italic">.</span></h1>
+      </div>
+
+      {/* KPI grid */}
+      <div className="grid grid-cols-4 gap-4">
+        {stats.map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+            className="glass rounded-3xl p-5 relative overflow-hidden">
+            <div className="absolute inset-0 opacity-30 pointer-events-none" style={{ background: `radial-gradient(circle at 80% 20%, ${s.color}40, transparent 50%)` }} />
+            <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'} relative`}>{s.label}</p>
+            <div className="flex items-baseline gap-1 mt-2 relative">
+              <span className={`text-4xl font-medium tracking-tight ${isDark ? 'text-white' : 'text-black'}`}>{s.value}</span>
+              {s.unit && <span className={`text-base ${isDark ? 'text-white/40' : 'text-black/40'}`}>{s.unit}</span>}
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Graphique mensuel style Apple Santé */}
+      <MonthlyChart
+        monthDate={monthDate}
+        monthDays={monthDays}
+        weekScores={weekScores}
+        monthScore={monthScore}
+        monthOffset={monthOffset}
+        setMonthOffset={setMonthOffset}
+        isDark={isDark}
+      />
+
+      {/* Évolution hebdomadaire détaillée */}
+      <div className="glass rounded-3xl p-6">
+        <h2 className={`text-lg font-medium mb-1 ${isDark ? 'text-white' : 'text-black'}`}>Détails hebdomadaires</h2>
+        <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'} mb-6`}>{monthName}</p>
+        <div className="space-y-3">
+          {weekScores.map((w, i) => {
+            const start = w.days[0].date;
+            const end = w.days[w.days.length - 1].date;
+            return (
+              <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.05 }}
+                className={`flex items-center gap-4 p-3 rounded-2xl ${isDark ? 'bg-white/[0.03]' : 'bg-black/[0.02]'}`}>
+                <div className="w-20 flex-shrink-0">
+                  <div className={`text-sm font-medium ${isDark ? 'text-white' : 'text-black'}`}>S{w.idx}</div>
+                  <div className={`font-mono text-[10px] ${isDark ? 'text-white/40' : 'text-black/40'}`}>
+                    {start.getDate()}-{end.getDate()}
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className={`h-2 rounded-full overflow-hidden ${isDark ? 'bg-white/5' : 'bg-black/5'}`}>
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${w.score}%` }} transition={{ duration: 0.8, delay: i * 0.05, ease: 'easeOut' }}
+                      className="h-full rounded-full"
+                      style={{ background: w.score >= 70 ? '#10B981' : (w.score >= 40 ? '#A78BFA' : '#EF4444') }} />
+                  </div>
+                </div>
+                <div className={`font-mono text-sm tabular-nums w-12 text-right ${isDark ? 'text-white' : 'text-black'}`}>
+                  {w.hasData ? `${w.score}%` : '—'}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Streaks par habitude */}
+      <div className="glass rounded-3xl p-6">
+        <h2 className={`text-lg font-medium mb-4 ${isDark ? 'text-white' : 'text-black'}`}>Habitudes</h2>
+        <div className="space-y-3">
+          {habitsWithStreak.length === 0 && <p className={`text-sm ${isDark ? 'text-white/40' : 'text-black/40'}`}>Aucune habitude enregistrée.</p>}
+          {habitsWithStreak.map(h => {
+            const max = Math.max(habitsWithStreak[0].streak, 7);
+            const w = (h.streak / max) * 100;
+            return (
+              <div key={h.id} className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}>{h.icon}</div>
+                <div className="flex-1">
+                  <div className={`text-sm font-medium ${isDark ? 'text-white' : 'text-black'}`}>{h.name}</div>
+                  <div className="h-1 mt-1.5 rounded-full overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }}>
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${w}%` }} transition={{ duration: 0.8, ease: 'easeOut' }} className="h-full rounded-full" style={{ background: '#FF6B6B' }} />
+                  </div>
+                </div>
+                <div className={`font-mono text-sm ${isDark ? 'text-white/60' : 'text-black/60'}`}>{h.streak} <span className="text-xs opacity-60">j</span></div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ----- Graphique mensuel style Apple Santé -----
+const MonthlyChart = ({ monthDate, monthDays, weekScores, monthScore, monthOffset, setMonthOffset, isDark }) => {
+  const [hover, setHover] = useState(null); // { type: 'day'|'week', idx, x, y, label, value }
+  const [chartType, setChartType] = useState('weeks'); // 'weeks' | 'days'
+
+  const monthName = monthDate.toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
+  const W = 720, H = 240, PAD_L = 36, PAD_R = 16, PAD_T = 24, PAD_B = 32;
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+
+  const accent = isDark ? '#5AC8FA' : '#0A84FF'; // bleu Apple
+  const grid = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const labelColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
+  const ticks = [0, 25, 50, 75, 100];
+
+  // Mode "weeks" : area chart sur les scores hebdo
+  // Mode "days" : bar chart sur tous les jours du mois
+
+  const yFor = (v) => PAD_T + innerH - (v / 100) * innerH;
+
+  // Points de la courbe semaine
+  const weekPoints = weekScores.map((w, i) => {
+    const x = PAD_L + (weekScores.length === 1 ? innerW / 2 : (innerW * i) / (weekScores.length - 1));
+    const y = yFor(w.hasData ? w.score : 0);
+    return { x, y, w };
+  });
+
+  const linePath = weekPoints.map((p, i) => (i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`)).join(' ');
+  const areaPath = `M ${weekPoints[0]?.x ?? PAD_L} ${PAD_T + innerH} ` + weekPoints.map(p => `L ${p.x} ${p.y}`).join(' ') + ` L ${weekPoints[weekPoints.length - 1]?.x ?? (PAD_L + innerW)} ${PAD_T + innerH} Z`;
+
+  // Bars pour les jours
+  const dayBars = monthDays.map((d, i) => {
+    const barW = Math.max(1, innerW / monthDays.length - 2);
+    const x = PAD_L + (innerW * i) / monthDays.length + 1;
+    const score = d.score ?? 0;
+    const h = (score / 100) * innerH;
+    return { x, y: PAD_T + innerH - h, w: barW, h, day: d };
+  });
+
+  return (
+    <div className="glass rounded-3xl p-6">
+      <div className="flex items-start justify-between mb-1">
+        <div>
+          <h2 className={`text-lg font-medium ${isDark ? 'text-white' : 'text-black'}`}>Vue mensuelle</h2>
+          <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'} mt-0.5`}>
+            {monthName} · Score moyen
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' }}>
+            <button onClick={() => setChartType('weeks')} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${chartType === 'weeks' ? (isDark ? 'bg-white/15 text-white' : 'bg-white text-black shadow-sm') : (isDark ? 'text-white/50' : 'text-black/50')}`}>Semaines</button>
+            <button onClick={() => setChartType('days')} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${chartType === 'days' ? (isDark ? 'bg-white/15 text-white' : 'bg-white text-black shadow-sm') : (isDark ? 'text-white/50' : 'text-black/50')}`}>Jours</button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setMonthOffset(monthOffset - 1)} className={`w-7 h-7 rounded-lg flex items-center justify-center ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}>
+              <Icon name="chevronLeft" size={13} />
+            </button>
+            <button onClick={() => setMonthOffset(0)} className={`text-[11px] font-mono uppercase tracking-wider px-2 ${isDark ? 'text-white/60' : 'text-black/60'}`}>
+              {monthOffset === 0 ? 'Ce mois' : ''}
+            </button>
+            <button onClick={() => setMonthOffset(monthOffset + 1)} className={`w-7 h-7 rounded-lg flex items-center justify-center ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}>
+              <Icon name="chevronRight" size={13} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-baseline gap-2 mt-2 mb-4">
+        <span className={`text-4xl font-medium tracking-tight ${isDark ? 'text-white' : 'text-black'}`}>{monthScore}</span>
+        <span className={`text-lg ${isDark ? 'text-white/40' : 'text-black/40'}`}>%</span>
+        <span className={`font-mono text-[10px] uppercase tracking-widest ml-2 ${isDark ? 'text-white/40' : 'text-black/40'}`}>moyenne</span>
+      </div>
+
+      <div className="relative" onMouseLeave={() => setHover(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 'auto', maxHeight: '280px' }} preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={accent} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={accent} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* Grid horizontal */}
+          {ticks.map(t => (
+            <g key={t}>
+              <line x1={PAD_L} y1={yFor(t)} x2={W - PAD_R} y2={yFor(t)} stroke={grid} strokeWidth="1" strokeDasharray={t === 0 ? '0' : '2 4'} />
+              <text x={PAD_L - 8} y={yFor(t) + 3} fontSize="10" fill={labelColor} textAnchor="end" fontFamily="ui-monospace, monospace">{t}</text>
+            </g>
+          ))}
+
+          {chartType === 'weeks' && weekPoints.length > 0 && (
+            <>
+              {/* Aire sous la courbe */}
+              <path d={areaPath} fill="url(#areaGradient)" />
+              {/* Ligne fine */}
+              <path d={linePath} fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              {/* Points */}
+              {weekPoints.map((p, i) => (
+                <g key={i}>
+                  <circle cx={p.x} cy={p.y} r={hover?.idx === i && hover?.type === 'week' ? 6 : 4} fill={isDark ? '#0A0A0F' : '#FFFFFF'} stroke={accent} strokeWidth="2" />
+                  <circle cx={p.x} cy={p.y} r="14" fill="transparent" style={{ cursor: 'pointer' }}
+                    onMouseEnter={() => setHover({ type: 'week', idx: i, x: p.x, y: p.y, label: `Semaine ${p.w.idx}`, value: p.w.hasData ? `${p.w.score}%` : 'Pas de données' })}
+                  />
+                  {/* Labels semaines en bas */}
+                  <text x={p.x} y={H - 10} fontSize="10" fill={labelColor} textAnchor="middle" fontFamily="ui-monospace, monospace">S{p.w.idx}</text>
+                </g>
+              ))}
+            </>
+          )}
+
+          {chartType === 'days' && dayBars.map((b, i) => {
+            const isToday = b.day.dk === dateKey();
+            const score = b.day.score ?? 0;
+            const color = score >= 70 ? '#10B981' : (score >= 40 ? accent : (score === 0 ? grid : '#EF4444'));
+            return (
+              <g key={i}>
+                <rect x={b.x} y={b.y} width={b.w} height={Math.max(b.h, b.day.score === null ? 0 : 2)} rx="1.5"
+                  fill={b.day.score === null ? grid : color}
+                  opacity={b.day.score === null ? 0.4 : 1}
+                  stroke={isToday ? accent : 'none'} strokeWidth={isToday ? 1 : 0}
+                />
+                <rect x={b.x} y={PAD_T} width={b.w} height={innerH} fill="transparent" style={{ cursor: 'pointer' }}
+                  onMouseEnter={() => setHover({ type: 'day', idx: i, x: b.x + b.w / 2, y: b.y, label: b.day.date.toLocaleDateString('fr-CH', { weekday: 'short', day: 'numeric', month: 'short' }), value: b.day.score === null ? 'Pas de données' : `${b.day.score}%` })}
+                />
+                {/* Tick chaque 5 jours */}
+                {(i + 1) % 5 === 0 && (
+                  <text x={b.x + b.w / 2} y={H - 10} fontSize="10" fill={labelColor} textAnchor="middle" fontFamily="ui-monospace, monospace">{b.day.date.getDate()}</text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        {/* Tooltip */}
+        {hover && (
+          <div
+            className="absolute pointer-events-none transition-opacity glass-strong rounded-xl px-3 py-2 shadow-lg"
+            style={{
+              left: `${(hover.x / W) * 100}%`,
+              top: `${(hover.y / H) * 100}%`,
+              transform: 'translate(-50%, calc(-100% - 12px))',
+              minWidth: '120px',
+            }}
+          >
+            <div className={`font-mono text-[9px] uppercase tracking-wider ${isDark ? 'text-white/50' : 'text-black/50'}`}>{hover.label}</div>
+            <div className={`text-sm font-medium ${isDark ? 'text-white' : 'text-black'}`}>{hover.value}</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ===================== WALLET =====================
+
+// Couleurs Wallet (vert émeraude / terracotta)
+const WALLET_GREEN = '#10B981';      // émeraude
+const WALLET_GREEN_SOFT = 'rgba(16,185,129,0.12)';
+const WALLET_RED = '#C2503A';        // terracotta / brique
+const WALLET_RED_SOFT = 'rgba(194,80,58,0.12)';
+const WALLET_BLUE = '#0A84FF';
+
+// Hook : compteur animé qui défile vers une valeur cible
+const useAnimatedNumber = (target, duration = 700) => {
+  const [val, setVal] = useState(target);
+  const fromRef = useRef(target);
+  const startRef = useRef(null);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    fromRef.current = val;
+    startRef.current = null;
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const step = (ts) => {
+      if (!startRef.current) startRef.current = ts;
+      const t = Math.min(1, (ts - startRef.current) / duration);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      const cur = fromRef.current + (target - fromRef.current) * eased;
+      setVal(cur);
+      if (t < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target]);
+
+  return val;
+};
+
+// Format CHF avec animation : fait varier le 0.00 et le -
+const formatCHFAnim = (n) => {
+  const sign = n < 0 ? '−' : '';
+  const abs = Math.abs(n);
+  const formatted = new Intl.NumberFormat('fr-CH', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(Math.round(abs));
+  return { sign, value: formatted };
+};
+
+// Helpers de plages temporelles
+const startOfWeek = (date) => {
+  const d = new Date(date);
+  const dow = (d.getDay() + 6) % 7; // lundi=0
+  d.setDate(d.getDate() - dow);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+const startOfMonth = (date) => {
+  const d = new Date(date);
+  d.setDate(1);
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+const startOfYear = (date) => new Date(date.getFullYear(), 0, 1);
+
+// Génère les buckets selon la période
+const buildBuckets = (period, refDate, transactions) => {
+  // retourne [{ label, sublabel, start, end, in, out, txs }]
+  const buckets = [];
+  if (period === 'week') {
+    const start = startOfWeek(refDate);
+    const dayLabels = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      const next = new Date(day); next.setDate(day.getDate() + 1);
+      buckets.push({
+        label: dayLabels[i],
+        sublabel: `${day.getDate()}/${String(day.getMonth() + 1).padStart(2,'0')}`,
+        start: day, end: next, in: 0, out: 0, txs: []
+      });
+    }
+  } else if (period === 'month') {
+    const start = startOfMonth(refDate);
+    const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
+    for (let i = 1; i <= lastDay; i++) {
+      const day = new Date(start.getFullYear(), start.getMonth(), i);
+      const next = new Date(start.getFullYear(), start.getMonth(), i + 1);
+      buckets.push({
+        label: String(i),
+        sublabel: '',
+        start: day, end: next, in: 0, out: 0, txs: []
+      });
+    }
+  } else { // year
+    const start = startOfYear(refDate);
+    const monthLabels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+    for (let i = 0; i < 12; i++) {
+      const day = new Date(start.getFullYear(), i, 1);
+      const next = new Date(start.getFullYear(), i + 1, 1);
+      buckets.push({
+        label: monthLabels[i],
+        sublabel: '',
+        start: day, end: next, in: 0, out: 0, txs: []
+      });
+    }
+  }
+  // Dispatch
+  transactions.forEach(t => {
+    const td = new Date(t.date);
+    const b = buckets.find(b => td >= b.start && td < b.end);
+    if (b) {
+      if (t.type === 'in') b.in += t.amount;
+      else b.out += t.amount;
+      b.txs.push(t);
+    }
+  });
+  return buckets;
+};
+
+// ----- Dual Flow Chart -----
+const DualFlowChart = ({ buckets, period, isDark }) => {
+  const [hover, setHover] = useState(null);
+  const W = 720, H = 240, PAD_L = 44, PAD_R = 16, PAD_T = 16, PAD_B = 36;
+  const innerW = W - PAD_L - PAD_R;
+  const innerH = H - PAD_T - PAD_B;
+
+  const max = Math.max(1, ...buckets.flatMap(b => [b.in, b.out]));
+  const niceMax = (() => {
+    const power = Math.pow(10, Math.floor(Math.log10(max)));
+    return Math.ceil(max / power) * power;
+  })();
+
+  const yFor = (v) => PAD_T + innerH - (v / niceMax) * innerH;
+  const grid = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+  const labelColor = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)';
+
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => Math.round(niceMax * t));
+
+  // Mode : barres dual pour week/month, area chart pour year
+  const useArea = period === 'year';
+
+  const formatTick = (v) => {
+    if (v === 0) return '0';
+    if (v >= 1000) return `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k`;
+    return String(v);
+  };
+
+  // Label interval (afficher 1 sur N pour ne pas surcharger en mode month)
+  const labelInterval = period === 'month' ? Math.ceil(buckets.length / 10) : 1;
+
+  // Largeur d'un slot
+  const slotW = innerW / buckets.length;
+
+  // Top catégorie d'un bucket (pour tooltip)
+  const topCategory = (txs, type) => {
+    const byCat = {};
+    txs.filter(t => t.type === type).forEach(t => {
+      byCat[t.category || 'Autre'] = (byCat[t.category || 'Autre'] || 0) + t.amount;
+    });
+    const sorted = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+    return sorted[0]?.[0] || null;
+  };
+
+  // Path pour area chart
+  const inAreaPath = useArea ? (() => {
+    if (buckets.length === 0) return '';
+    const pts = buckets.map((b, i) => [PAD_L + slotW * i + slotW / 2, yFor(b.in)]);
+    const start = `M ${PAD_L + slotW / 2} ${PAD_T + innerH}`;
+    const line = pts.map(p => `L ${p[0]} ${p[1]}`).join(' ');
+    return `${start} ${line} L ${PAD_L + slotW * (buckets.length - 1) + slotW / 2} ${PAD_T + innerH} Z`;
+  })() : '';
+  const outAreaPath = useArea ? (() => {
+    if (buckets.length === 0) return '';
+    const pts = buckets.map((b, i) => [PAD_L + slotW * i + slotW / 2, yFor(b.out)]);
+    const start = `M ${PAD_L + slotW / 2} ${PAD_T + innerH}`;
+    const line = pts.map(p => `L ${p[0]} ${p[1]}`).join(' ');
+    return `${start} ${line} L ${PAD_L + slotW * (buckets.length - 1) + slotW / 2} ${PAD_T + innerH} Z`;
+  })() : '';
+  const inLinePath = useArea ? buckets.map((b, i) => `${i === 0 ? 'M' : 'L'} ${PAD_L + slotW * i + slotW / 2} ${yFor(b.in)}`).join(' ') : '';
+  const outLinePath = useArea ? buckets.map((b, i) => `${i === 0 ? 'M' : 'L'} ${PAD_L + slotW * i + slotW / 2} ${yFor(b.out)}`).join(' ') : '';
+
+  return (
+    <div className="relative" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 'auto', maxHeight: '300px' }} preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="walletGreenGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={WALLET_GREEN} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={WALLET_GREEN} stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id="walletRedGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={WALLET_RED} stopOpacity="0.30" />
+            <stop offset="100%" stopColor={WALLET_RED} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Grille horizontale */}
+        {ticks.map((t, i) => (
+          <g key={i}>
+            <line x1={PAD_L} y1={yFor(t)} x2={W - PAD_R} y2={yFor(t)} stroke={grid} strokeWidth="1" strokeDasharray={i === 0 ? '0' : '2 4'} />
+            <text x={PAD_L - 8} y={yFor(t) + 3} fontSize="10" fill={labelColor} textAnchor="end" fontFamily="ui-monospace, monospace">
+              {formatTick(t)}
+            </text>
+          </g>
+        ))}
+
+        {!useArea && buckets.map((b, i) => {
+          const x0 = PAD_L + slotW * i;
+          const barW = Math.max(2, slotW * 0.32);
+          const gap = slotW * 0.08;
+          const xIn = x0 + slotW / 2 - barW - gap / 2;
+          const xOut = x0 + slotW / 2 + gap / 2;
+          const yIn = yFor(b.in);
+          const yOut = yFor(b.out);
+          const hIn = (PAD_T + innerH) - yIn;
+          const hOut = (PAD_T + innerH) - yOut;
+          const showLabel = i % labelInterval === 0 || i === buckets.length - 1;
+          const isHovered = hover?.idx === i;
+          return (
+            <g key={i}>
+              {/* Hover area */}
+              <rect x={x0} y={PAD_T} width={slotW} height={innerH} fill="transparent" style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setHover({ idx: i, bucket: b, x: x0 + slotW / 2 })}
+              />
+              {/* Bar revenus */}
+              {b.in > 0 && (
+                <motion.rect
+                  x={xIn} width={barW} rx="2"
+                  initial={{ y: PAD_T + innerH, height: 0 }}
+                  animate={{ y: yIn, height: Math.max(2, hIn) }}
+                  transition={{ duration: 0.6, delay: i * 0.02, ease: [0.2, 0.8, 0.4, 1] }}
+                  fill={WALLET_GREEN}
+                  opacity={isHovered ? 1 : 0.85}
+                />
+              )}
+              {/* Bar dépenses */}
+              {b.out > 0 && (
+                <motion.rect
+                  x={xOut} width={barW} rx="2"
+                  initial={{ y: PAD_T + innerH, height: 0 }}
+                  animate={{ y: yOut, height: Math.max(2, hOut) }}
+                  transition={{ duration: 0.6, delay: i * 0.02 + 0.05, ease: [0.2, 0.8, 0.4, 1] }}
+                  fill={WALLET_RED}
+                  opacity={isHovered ? 1 : 0.85}
+                />
+              )}
+              {showLabel && (
+                <text x={x0 + slotW / 2} y={H - 10} fontSize="10" fill={labelColor} textAnchor="middle" fontFamily="ui-monospace, monospace">
+                  {b.label}
+                </text>
+              )}
+              {/* Indicateur barre survolée */}
+              {isHovered && (
+                <line x1={x0 + slotW / 2} y1={PAD_T} x2={x0 + slotW / 2} y2={PAD_T + innerH} stroke={labelColor} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
+              )}
+            </g>
+          );
+        })}
+
+        {useArea && buckets.length > 0 && (
+          <>
+            <motion.path d={outAreaPath} fill="url(#walletRedGrad)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }} />
+            <motion.path d={inAreaPath} fill="url(#walletGreenGrad)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.1 }} />
+            <motion.path d={outLinePath} fill="none" stroke={WALLET_RED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.2, ease: 'easeOut' }} />
+            <motion.path d={inLinePath} fill="none" stroke={WALLET_GREEN} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.2, delay: 0.1, ease: 'easeOut' }} />
+            {/* Points + hover */}
+            {buckets.map((b, i) => {
+              const cx = PAD_L + slotW * i + slotW / 2;
+              const isHovered = hover?.idx === i;
+              const showLabel = i % labelInterval === 0 || i === buckets.length - 1;
+              return (
+                <g key={i}>
+                  <rect x={PAD_L + slotW * i} y={PAD_T} width={slotW} height={innerH} fill="transparent" style={{ cursor: 'pointer' }}
+                    onMouseEnter={() => setHover({ idx: i, bucket: b, x: cx })} />
+                  <circle cx={cx} cy={yFor(b.in)} r={isHovered ? 5 : 3} fill={isDark ? '#0A0A0F' : '#fff'} stroke={WALLET_GREEN} strokeWidth="2" />
+                  <circle cx={cx} cy={yFor(b.out)} r={isHovered ? 5 : 3} fill={isDark ? '#0A0A0F' : '#fff'} stroke={WALLET_RED} strokeWidth="2" />
+                  {showLabel && (
+                    <text x={cx} y={H - 10} fontSize="10" fill={labelColor} textAnchor="middle" fontFamily="ui-monospace, monospace">{b.label}</text>
+                  )}
+                  {isHovered && (
+                    <line x1={cx} y1={PAD_T} x2={cx} y2={PAD_T + innerH} stroke={labelColor} strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
+                  )}
+                </g>
+              );
+            })}
+          </>
+        )}
+      </svg>
+
+      {/* Tooltip glassmorphism */}
+      <AnimatePresence>
+        {hover && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.15 }}
+            className="absolute pointer-events-none glass-strong rounded-2xl px-4 py-3 shadow-xl"
+            style={{
+              left: `${(hover.x / W) * 100}%`,
+              top: '12px',
+              transform: 'translateX(-50%)',
+              minWidth: '180px',
+              zIndex: 10,
+            }}
+          >
+            <div className={`font-mono text-[9px] uppercase tracking-widest ${isDark ? 'text-white/50' : 'text-black/50'}`}>
+              {hover.bucket.label}{hover.bucket.sublabel ? ` · ${hover.bucket.sublabel}` : ''}
+            </div>
+            <div className="mt-2 space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ background: WALLET_GREEN }}></div>
+                  <span className={`text-[11px] ${isDark ? 'text-white/70' : 'text-black/70'}`}>Revenus</span>
+                </div>
+                <span className={`text-sm font-medium tabular-nums ${isDark ? 'text-white' : 'text-black'}`}>{formatCHF(hover.bucket.in)}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2 h-2 rounded-full" style={{ background: WALLET_RED }}></div>
+                  <span className={`text-[11px] ${isDark ? 'text-white/70' : 'text-black/70'}`}>Dépenses</span>
+                </div>
+                <span className={`text-sm font-medium tabular-nums ${isDark ? 'text-white' : 'text-black'}`}>{formatCHF(hover.bucket.out)}</span>
+              </div>
+              {topCategory(hover.bucket.txs, 'out') && (
+                <div className={`pt-1.5 mt-1.5 border-t flex items-center justify-between gap-3 ${isDark ? 'border-white/10' : 'border-black/10'}`}>
+                  <span className={`font-mono text-[9px] uppercase tracking-wider ${isDark ? 'text-white/40' : 'text-black/40'}`}>Top catégorie</span>
+                  <span className={`text-[11px] ${isDark ? 'text-white/80' : 'text-black/80'}`}>{topCategory(hover.bucket.txs, 'out')}</span>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+// ----- Solde animé en gros -----
+const AnimatedBalance = ({ value, isDark }) => {
+  const animated = useAnimatedNumber(value, 800);
+  const { sign, value: formatted } = formatCHFAnim(animated);
+  return (
+    <div className="flex items-baseline gap-1">
+      <span className={`text-6xl font-medium tracking-tighter tabular-nums ${isDark ? 'text-white' : 'text-black'}`}>
+        {sign}{formatted}
+      </span>
+      <span className={`text-2xl font-light ml-1 ${isDark ? 'text-white/40' : 'text-black/40'}`}>CHF</span>
+    </div>
+  );
+};
+
+// ----- Carte transaction (avec animation spring au montage) -----
+const TxCard = ({ t, onDelete, isDark }) => {
+  const isIn = t.type === 'in';
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: -8, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+      whileHover={{ scale: 1.01, y: -1 }}
+      className={`group flex items-center gap-3 p-3 rounded-2xl glass`}
+      style={{
+        background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.5)',
+      }}
+    >
+      <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+        style={{ background: isIn ? WALLET_GREEN_SOFT : WALLET_RED_SOFT, color: isIn ? WALLET_GREEN : WALLET_RED }}>
+        <Icon name={isIn ? 'arrowUp' : 'arrowDown'} size={15} strokeWidth={2.2} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-black'}`}>{t.label}</div>
+        <div className={`text-xs font-mono ${isDark ? 'text-white/40' : 'text-black/40'}`}>
+          {t.category || '—'} · {new Date(t.date).toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })}
+          {t.source ? ` · ${t.source}` : ''}
+        </div>
+      </div>
+      <div className={`font-medium tabular-nums text-sm ${isIn ? 'text-emerald-500' : (isDark ? 'text-white' : 'text-black')}`} style={isIn ? { color: WALLET_GREEN } : {}}>
+        {isIn ? '+' : '−'}{formatCHF(t.amount)}
+      </div>
+      <button onClick={() => onDelete(t.id)}
+        className={`opacity-0 group-hover:opacity-100 transition-opacity ${isDark ? 'text-white/40 hover:text-rose-400' : 'text-black/40 hover:text-rose-500'}`}>
+        <Icon name="trash" size={13} />
+      </button>
+    </motion.div>
+  );
+};
+
+// ----- Wallet principal -----
+const Wallet = ({ data, setData, isDark }) => {
+  const [period, setPeriod] = useState('month'); // 'week' | 'month' | 'year'
+  const [refDate, setRefDate] = useState(new Date());
+  const [showForm, setShowForm] = useState(false);
+  const [formType, setFormType] = useState('out');
+
+  const txs = data.transactions || [];
+  const sortedTxs = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+
+  // Solde total
+  const balance = useMemo(() => txs.reduce((s, t) => s + (t.type === 'in' ? t.amount : -t.amount), 0), [txs]);
+
+  // Buckets pour le graphique
+  const buckets = useMemo(() => buildBuckets(period, refDate, txs), [period, refDate, txs]);
+
+  // Stats du mois courant (pour KPIs)
+  const now = new Date();
+  const mKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}`;
+  const monthTxs = txs.filter(t => t.date.startsWith(mKey));
+  const monthIn = monthTxs.filter(t => t.type === 'in').reduce((s, t) => s + t.amount, 0);
+  const monthOut = monthTxs.filter(t => t.type === 'out').reduce((s, t) => s + t.amount, 0);
+  const savingsRate = monthIn > 0 ? Math.round(((monthIn - monthOut) / monthIn) * 100) : 0;
+
+  // Top catégories du mois
+  const catTotals = {};
+  monthTxs.filter(t => t.type === 'out').forEach(t => {
+    catTotals[t.category || 'Autre'] = (catTotals[t.category || 'Autre'] || 0) + t.amount;
+  });
+  const topCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const totalOut = topCats.reduce((s, [, v]) => s + v, 0);
+
+  const addTx = (tx) => {
+    setData({ ...data, transactions: [...txs, { ...tx, id: uid() }] });
+    setShowForm(false);
+  };
+  const deleteTx = (id) => {
+    setData({ ...data, transactions: txs.filter(t => t.id !== id) });
+  };
+
+  // Label de la période courante
+  const periodLabel = (() => {
+    if (period === 'week') {
+      const start = startOfWeek(refDate);
+      const end = new Date(start); end.setDate(start.getDate() + 6);
+      return `${start.toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })} – ${end.toLocaleDateString('fr-CH', { day: 'numeric', month: 'short' })}`;
+    }
+    if (period === 'month') return refDate.toLocaleDateString('fr-CH', { month: 'long', year: 'numeric' });
+    return `${refDate.getFullYear()}`;
+  })();
+
+  // Total in/out de la période
+  const periodIn = buckets.reduce((s, b) => s + b.in, 0);
+  const periodOut = buckets.reduce((s, b) => s + b.out, 0);
+
+  const navPeriod = (delta) => {
+    const d = new Date(refDate);
+    if (period === 'week') d.setDate(d.getDate() + delta * 7);
+    else if (period === 'month') d.setMonth(d.getMonth() + delta);
+    else d.setFullYear(d.getFullYear() + delta);
+    setRefDate(d);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className={`font-mono text-xs uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'}`}>
+            Finances
+          </p>
+          <h1 className={`text-5xl font-medium tracking-tight mt-2 ${isDark ? 'text-white' : 'text-black'}`}>
+            Wallet<span className="font-light italic">.</span>
+          </h1>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => { setFormType('in'); setShowForm(true); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-white"
+            style={{ background: WALLET_GREEN }}>
+            <Icon name="arrowUp" size={14} /> Revenu
+          </button>
+          <button onClick={() => { setFormType('out'); setShowForm(true); }}
+            className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium text-white"
+            style={{ background: WALLET_RED }}>
+            <Icon name="arrowDown" size={14} /> Dépense
+          </button>
+        </div>
+      </div>
+
+      {/* Carte solde principale (style Apple Card) */}
+      <motion.div
+        initial={{ opacity: 0, y: 16, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 180, damping: 22 }}
+        className="glass rounded-3xl p-7 relative overflow-hidden"
+      >
+        {/* Effet "card" */}
+        <div className="absolute inset-0 pointer-events-none opacity-50" style={{
+          background: `radial-gradient(circle at 85% 25%, ${WALLET_GREEN}20, transparent 50%), radial-gradient(circle at 15% 85%, ${WALLET_RED}15, transparent 50%)`
+        }} />
+        <div className="absolute top-0 right-0 w-40 h-40 rounded-full pointer-events-none" style={{
+          background: `radial-gradient(circle, ${WALLET_BLUE}12 0%, transparent 70%)`,
+          transform: 'translate(40%, -40%)'
+        }} />
+
+        <div className="relative flex items-start justify-between gap-6 flex-wrap">
+          <div>
+            <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'} mb-3`}>
+              Solde total
+            </p>
+            <AnimatedBalance value={balance} isDark={isDark} />
+            <div className="flex items-center gap-4 mt-4">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ background: WALLET_GREEN }}></div>
+                <span className={`text-xs ${isDark ? 'text-white/60' : 'text-black/60'}`}>+{formatCHF(monthIn)}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full" style={{ background: WALLET_RED }}></div>
+                <span className={`text-xs ${isDark ? 'text-white/60' : 'text-black/60'}`}>−{formatCHF(monthOut)}</span>
+              </div>
+              <span className={`font-mono text-[10px] uppercase tracking-wider ${isDark ? 'text-white/30' : 'text-black/30'}`}>
+                ce mois
+              </span>
+            </div>
+          </div>
+
+          {/* Taux d'épargne */}
+          <div className="flex flex-col items-end">
+            <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'} mb-2`}>
+              Taux d'épargne
+            </p>
+            <div className="flex items-baseline gap-1">
+              <span className={`text-3xl font-medium tabular-nums ${savingsRate >= 0 ? '' : 'text-rose-500'} ${isDark ? 'text-white' : 'text-black'}`}
+                style={savingsRate >= 20 ? { color: WALLET_GREEN } : (savingsRate < 0 ? { color: WALLET_RED } : {})}>
+                {savingsRate}%
+              </span>
+            </div>
+            {/* Mini progress */}
+            <div className="w-32 h-1 rounded-full mt-2 overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }}>
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(100, Math.max(0, savingsRate))}%` }}
+                transition={{ duration: 1, ease: 'easeOut' }}
+                className="h-full rounded-full"
+                style={{ background: savingsRate >= 20 ? WALLET_GREEN : (savingsRate < 0 ? WALLET_RED : WALLET_BLUE) }}
+              />
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Graphique Dual Flow */}
+      <div className="glass rounded-3xl p-6">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div>
+            <h2 className={`text-lg font-medium ${isDark ? 'text-white' : 'text-black'}`}>Flux financiers</h2>
+            <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'} mt-0.5`}>
+              {periodLabel} · +{formatCHF(periodIn)} / −{formatCHF(periodOut)}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Filtres temporels */}
+            <div className="flex items-center gap-1 p-0.5 rounded-lg" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' }}>
+              {[
+                { id: 'week', label: 'Semaine' },
+                { id: 'month', label: 'Mois' },
+                { id: 'year', label: 'Année' },
+              ].map(p => (
+                <button key={p.id} onClick={() => { setPeriod(p.id); setRefDate(new Date()); }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${period === p.id ? (isDark ? 'bg-white/15 text-white' : 'bg-white text-black shadow-sm') : (isDark ? 'text-white/50' : 'text-black/50')}`}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1">
+              <button onClick={() => navPeriod(-1)}
+                className={`w-7 h-7 rounded-lg flex items-center justify-center ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}>
+                <Icon name="chevronLeft" size={13} />
+              </button>
+              <button onClick={() => setRefDate(new Date())}
+                className={`text-[11px] font-mono uppercase tracking-wider px-2 ${isDark ? 'text-white/60' : 'text-black/60'}`}>
+                Auj.
+              </button>
+              <button onClick={() => navPeriod(1)}
+                className={`w-7 h-7 rounded-lg flex items-center justify-center ${isDark ? 'hover:bg-white/10' : 'hover:bg-black/5'}`}>
+                <Icon name="chevronRight" size={13} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <DualFlowChart buckets={buckets} period={period} isDark={isDark} />
+
+        {/* Légende */}
+        <div className="flex items-center gap-5 mt-3 ml-12">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm" style={{ background: WALLET_GREEN }}></div>
+            <span className={`text-xs ${isDark ? 'text-white/60' : 'text-black/60'}`}>Revenus</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-sm" style={{ background: WALLET_RED }}></div>
+            <span className={`text-xs ${isDark ? 'text-white/60' : 'text-black/60'}`}>Dépenses</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Catégories + transactions */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="glass rounded-3xl p-6 col-span-1">
+          <h2 className={`text-lg font-medium mb-1 ${isDark ? 'text-white' : 'text-black'}`}>Catégories</h2>
+          <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'} mb-4`}>
+            Dépenses du mois
+          </p>
+          {topCats.length === 0 ? (
+            <p className={`text-sm ${isDark ? 'text-white/40' : 'text-black/40'}`}>Pas encore de dépense.</p>
+          ) : (
+            <div className="space-y-3">
+              {topCats.map(([cat, amount], i) => {
+                const pct = totalOut === 0 ? 0 : (amount / totalOut) * 100;
+                const palette = [WALLET_RED, '#FBBF24', '#A78BFA', WALLET_BLUE, '#EC4899'];
+                return (
+                  <div key={cat}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`text-sm ${isDark ? 'text-white/80' : 'text-black/80'}`}>{cat}</span>
+                      <span className={`font-mono text-xs ${isDark ? 'text-white/50' : 'text-black/50'}`}>
+                        {formatCHF(amount)}
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full overflow-hidden" style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)' }}>
+                      <motion.div
+                        initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 0.6, delay: i * 0.08 }}
+                        className="h-full rounded-full" style={{ background: palette[i % palette.length] }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="glass rounded-3xl p-6 col-span-2">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className={`text-lg font-medium ${isDark ? 'text-white' : 'text-black'}`}>Historique</h2>
+            <span className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'}`}>
+              {sortedTxs.length} transaction{sortedTxs.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <p className={`font-mono text-[10px] uppercase tracking-widest ${isDark ? 'text-white/40' : 'text-black/40'} mb-4`}>
+            Toutes les transactions
+          </p>
+          {sortedTxs.length === 0 ? (
+            <div className={`text-sm py-8 text-center ${isDark ? 'text-white/40' : 'text-black/40'}`}>
+              Aucune transaction. Ajoute ta première via les boutons en haut.
+            </div>
+          ) : (
+            <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
+              <AnimatePresence>
+                {sortedTxs.map(t => (
+                  <TxCard key={t.id} t={t} onDelete={deleteTx} isDark={isDark} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showForm && (
+          <TxForm type={formType} onSave={addTx} onCancel={() => setShowForm(false)} isDark={isDark} />
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const TxForm = ({ type, onSave, onCancel, isDark }) => {
+  const [label, setLabel] = useState('');
+  const [amount, setAmount] = useState('');
+  const [category, setCategory] = useState('');
+  const [source, setSource] = useState('');
+  const [date, setDate] = useState(dateKey());
+
+  const presetCats = type === 'in'
+    ? ['Salaire', 'Client agence', 'Freelance', 'Autre']
+    : ['Food', 'Transport', 'Loyer', 'Loisirs', 'Études', 'Abonnements', 'Autre'];
+
+  const submit = () => {
+    if (!label.trim() || !amount) return;
+    onSave({
+      type, label: label.trim(),
+      amount: Math.abs(parseFloat(amount)),
+      category: category || 'Autre',
+      source: source.trim(), date,
+    });
+  };
+
+  const accent = type === 'in' ? WALLET_GREEN : WALLET_RED;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onCancel}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)' }}
+    >
+      <motion.div
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        transition={{ type: 'spring', damping: 30, stiffness: 350 }}
+        onClick={(e) => e.stopPropagation()}
+        className="glass-strong rounded-3xl p-6 w-full max-w-md"
+      >
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: accent + '22', color: accent }}>
+            <Icon name={type === 'in' ? 'arrowUp' : 'arrowDown'} size={15} />
+          </div>
+          <h3 className={`text-xl font-medium ${isDark ? 'text-white' : 'text-black'}`}>
+            {type === 'in' ? 'Nouveau revenu' : 'Nouvelle dépense'}
+          </h3>
+        </div>
+        <p className={`text-sm mb-5 ml-12 ${isDark ? 'text-white/50' : 'text-black/50'}`}>En CHF</p>
+
+        <div className="space-y-4">
+          <div>
+            <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Description</label>
+            <input type="text" autoFocus value={label} onChange={e => setLabel(e.target.value)}
+              placeholder={type === 'in' ? 'Ex: Site client Dupont SA' : 'Ex: Courses Migros'}
+              className={`w-full px-4 py-2.5 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-white/30' : 'bg-white/60 border-black/5 text-black placeholder-black/30'}`} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Montant (CHF)</label>
+              <input type="number" step="0.01" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0"
+                className={`w-full px-4 py-2.5 rounded-xl border tabular-nums ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-white/30' : 'bg-white/60 border-black/5 text-black placeholder-black/30'}`} />
+            </div>
+            <div>
+              <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Date</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)}
+                className={`w-full px-4 py-2.5 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white' : 'bg-white/60 border-black/5 text-black'}`} />
+            </div>
+          </div>
+
+          <div>
+            <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Catégorie</label>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {presetCats.map(c => (
+                <button key={c} onClick={() => setCategory(c)}
+                  className={`px-3 py-1 rounded-full text-xs transition-all ${
+                    category === c ? (isDark ? 'bg-white text-black' : 'bg-black text-white') : (isDark ? 'bg-white/5 text-white/60 hover:bg-white/10' : 'bg-white/60 text-black/60 hover:bg-white/80')
+                  }`}>{c}</button>
+              ))}
+            </div>
+            <input type="text" value={category} onChange={e => setCategory(e.target.value)} placeholder="Ou catégorie libre..."
+              className={`w-full px-4 py-2 rounded-xl border text-sm ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-white/30' : 'bg-white/60 border-black/5 text-black placeholder-black/30'}`} />
+          </div>
+
+          {type === 'in' && (
+            <div>
+              <label className={`block font-mono text-[10px] uppercase tracking-wider mb-1.5 ${isDark ? 'text-white/40' : 'text-black/40'}`}>Source / Client (optionnel)</label>
+              <input type="text" value={source} onChange={e => setSource(e.target.value)} placeholder="Ex: Dupont SA"
+                className={`w-full px-4 py-2.5 rounded-xl border ${isDark ? 'bg-white/5 border-white/10 text-white placeholder-white/30' : 'bg-white/60 border-black/5 text-black placeholder-black/30'}`} />
+            </div>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button onClick={onCancel} className={`text-sm font-medium px-4 py-2 ${isDark ? 'text-white/60' : 'text-black/60'}`}>Annuler</button>
+          <button onClick={submit} disabled={!label.trim() || !amount}
+            className="text-sm font-medium px-4 py-2 rounded-xl text-white disabled:opacity-40"
+            style={{ background: accent }}>
+            Enregistrer
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+// ===================== ROOT =====================
+const App = () => {
+  const [data, setDataState] = useState(load);
+  const [page, setPage] = useState('dashboard');
+  const isDark = useTheme(data.themeMode);
+
+  const setData = (newData) => {
+    setDataState(newData);
+    persist(newData);
+  };
+
+  const cycleTheme = () => {
+    const cycle = { auto: 'light', light: 'dark', dark: 'auto' };
+    setData({ ...data, themeMode: cycle[data.themeMode] });
+  };
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `aura-${dateKey()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = (file) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const imported = JSON.parse(e.target.result);
+        if (!confirm('Remplacer toutes tes données ?')) return;
+        setData({ ...structuredClone(defaultData), ...imported });
+      } catch {
+        alert('Fichier invalide');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  return (
+    <div className={`min-h-screen ${isDark ? 'text-white' : 'text-black'}`} style={{ background: isDark ? '#0A0A0F' : '#F5F5F7' }}>
+      <Sidebar
+        page={page}
+        setPage={setPage}
+        themeMode={data.themeMode}
+        cycleTheme={cycleTheme}
+        isDark={isDark}
+      />
+
+      <main className="ml-20 p-8 min-h-screen">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={page}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.25 }}
+            className="h-full"
+          >
+            {page === 'dashboard' && <Dashboard data={data} setData={setData} isDark={isDark} />}
+            {page === 'matrix' && <Matrix data={data} setData={setData} isDark={isDark} />}
+            {page === 'stats' && <Stats data={data} isDark={isDark} />}
+            {page === 'wallet' && <Wallet data={data} setData={setData} isDark={isDark} />}
+          </motion.div>
+        </AnimatePresence>
+      </main>
+
+      {/* Floating data controls */}
+      <div className="fixed bottom-6 right-6 flex gap-2 z-30">
+        <button
+          onClick={exportData}
+          className={`w-10 h-10 rounded-full glass-strong flex items-center justify-center hover:scale-105 transition-transform ${isDark ? 'text-white/70' : 'text-black/70'}`}
+          title="Exporter"
+        >
+          <Icon name="download" size={16} />
+        </button>
+        <label className={`w-10 h-10 rounded-full glass-strong flex items-center justify-center hover:scale-105 transition-transform cursor-pointer ${isDark ? 'text-white/70' : 'text-black/70'}`} title="Importer">
+          <Icon name="upload" size={16} />
+          <input type="file" accept=".json" className="hidden" onChange={e => e.target.files[0] && importData(e.target.files[0])} />
+        </label>
+      </div>
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
